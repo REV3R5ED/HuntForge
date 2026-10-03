@@ -2,7 +2,8 @@
 ``huntforge events ...`` / ``huntforge registry ...`` /
 ``huntforge timeline ...`` / ``huntforge lineage ...`` /
 ``huntforge entities ...`` / ``huntforge detect ...`` /
-``huntforge rules ...`` / ``huntforge mitre ...`` / ``huntforge sigma ...``.
+``huntforge rules ...`` / ``huntforge mitre ...`` / ``huntforge sigma ...`` /
+``huntforge correlate ...`` / ``huntforge narrative ...``.
 
 Every command returns a shared result envelope, renders human-readable
 text by default (``--json`` for automation), uses structured exit
@@ -25,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from huntforge import __version__
+from huntforge import correlate as correlate_mod
 from huntforge import mitre as mitre_mod
 from huntforge import sigma as sigma_mod
 from huntforge.cases.service import CaseService
@@ -71,6 +73,8 @@ plugins_mod.register(
             "rules",
             "mitre",
             "sigma",
+            "correlate",
+            "narrative",
         ],
     )
 )
@@ -291,6 +295,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--rule",
         required=True,
         help="Rule file (.json/.yaml/.yml) or bundled sample name",
+    )
+
+    correlate_p = sub.add_parser(
+        "correlate", help="Correlate a case into activity clusters"
+    )
+    correlate_p.add_argument("--case", required=True, help="Case identifier")
+
+    narrative_p = sub.add_parser(
+        "narrative", help="Full attack narrative for one activity cluster"
+    )
+    narrative_p.add_argument("--case", required=True, help="Case identifier")
+    narrative_p.add_argument(
+        "--cluster", required=True, type=int, help="Cluster id from 'correlate'"
     )
 
     return parser
@@ -790,6 +807,70 @@ def cmd_sigma(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | 
     return result, args.case
 
 
+def cmd_correlate(
+    args: argparse.Namespace, state_dir: Path
+) -> tuple[Result, str | None]:
+    result = Result(command="correlate")
+    service = CaseService(state_dir)
+    try:
+        db = service.open_db(args.case)
+    except CaseError as exc:
+        result.fail(str(exc))
+        return result, None
+    try:
+        events = db.all_events()
+        findings = db.list_findings()
+        clusters, stats = correlate_mod.engine_mod.correlate_case(events, findings)
+        result.data = {
+            "case": args.case,
+            "clusters": [c.to_dict() for c in clusters],
+            **stats,
+        }
+        n = len(clusters)
+        result.summary = (
+            f"{n} activity cluster(s) from {len(events)} event(s), "
+            f"{stats['linkage_count']} linkage(s)"
+        )
+        if n == 0:
+            result.summary += " — no correlated activity"
+    finally:
+        db.close()
+    return result, args.case
+
+
+def cmd_narrative(
+    args: argparse.Namespace, state_dir: Path
+) -> tuple[Result, str | None]:
+    result = Result(command="narrative")
+    service = CaseService(state_dir)
+    try:
+        db = service.open_db(args.case)
+    except CaseError as exc:
+        result.fail(str(exc))
+        return result, None
+    try:
+        events = db.all_events()
+        findings = db.list_findings()
+        clusters, _stats = correlate_mod.engine_mod.correlate_case(events, findings)
+        if args.cluster < 0 or args.cluster >= len(clusters):
+            result.fail(
+                f"no cluster {args.cluster} "
+                f"({len(clusters)} cluster(s); see 'huntforge correlate')"
+            )
+            return result, args.case
+        narrative = correlate_mod.engine_mod.build_narrative(
+            clusters[args.cluster], events
+        )
+        result.data = narrative.to_dict()
+        result.summary = (
+            f"cluster {args.cluster}: {narrative.summary} "
+            f"(confidence {narrative.confidence})"
+        )
+    finally:
+        db.close()
+    return result, args.case
+
+
 def _human_detect(
     data: dict[str, Any], findings: list[dict[str, Any]], explain: bool
 ) -> None:
@@ -887,6 +968,77 @@ def _human_sigma(data: dict[str, Any], findings: list[dict[str, Any]]) -> None:
         return
     # `sigma run`: same shape as detect.
     _human_detect(data, findings, explain=False)
+
+
+def _human_correlate(data: dict[str, Any]) -> None:
+    clusters = data.get("clusters") or []
+    if not clusters:
+        print("  no activity clusters — no linkages between events")
+        return
+    for cluster in clusters:
+        sev = ", ".join(
+            f"{n} {name}" for name, n in sorted(cluster.get("by_severity", {}).items())
+        )
+        sev = f", findings: {sev}" if sev else ", no findings"
+        techs = ", ".join(t["id"] for t in cluster.get("techniques") or [])
+        techs = f" [{techs}]" if techs else ""
+        print(
+            f"  [{cluster['cluster_id']}] confidence {cluster['confidence']} "
+            f"— {cluster['event_count']} event(s){sev}{techs}"
+        )
+        for link in cluster.get("linkages") or []:
+            print(
+                f"      {link['kind']}: #{link['event_a']} <-> #{link['event_b']} "
+                f"(INFERRED, conf {link['confidence']})"
+            )
+    kinds = data.get("linkages_by_kind") or {}
+    if kinds:
+        bits = ", ".join(f"{k}: {n}" for k, n in sorted(kinds.items()))
+        print(f"  linkages: {bits}")
+    print(f"  uncorrelated events: {data.get('uncorrelated_event_count', 0)}")
+    print("  note: linkages are INFERRED hypotheses; events are OBSERVED facts")
+
+
+def _human_narrative(data: dict[str, Any]) -> None:
+    print(f"  {data['summary']}")
+    print(f"  confidence {data['confidence']}: {data['confidence_reason']}")
+    observed = data.get("observed") or []
+    print(f"  OBSERVED ({len(observed)} events):")
+    for entry in observed:
+        ts = entry.get("timestamp") or "(untimed)"
+        print(f"    {ts} [#{entry['id']}] {entry['summary']}")
+    inferred = data.get("inferred") or []
+    print(f"  INFERRED linkages ({len(inferred)}):")
+    for link in inferred:
+        print(f"    [{link['kind']}] {link['claim']}")
+        print(f"        confidence {link['confidence']}: {link['confidence_reason']}")
+    detections = data.get("detections") or []
+    print(f"  detections ({len(detections)}):")
+    for det in detections:
+        print(
+            f"    [{det.get('finding_uid')}] {det.get('severity')} "
+            f"{det.get('title')} (conf {det.get('confidence')})"
+        )
+    techniques = data.get("techniques") or []
+    if techniques:
+        print("  techniques:")
+        for tech in techniques:
+            name = f" {tech['name']}" if tech.get("name") else ""
+            print(f"    {tech['id']}{name}")
+    entities = data.get("entities") or []
+    if entities:
+        print(f"  entities ({len(entities)}):")
+        for entity in entities[:12]:
+            print(
+                f"    {entity['type']}: {entity['value']} "
+                f"({entity['count']} observation(s))"
+            )
+        if len(entities) > 12:
+            print(f"    … and {len(entities) - 12} more")
+    missing = data.get("whats_missing") or []
+    print(f"  what's missing ({len(missing)}):")
+    for item in missing:
+        print(f"    - {item}")
 
 
 def _human_registry(data: dict[str, Any]) -> None:
@@ -1000,6 +1152,12 @@ def render(
     if result.command in ("sigma list", "sigma run") and result.data:
         _human_sigma(result.data, result.findings)
         return
+    if result.command == "correlate" and result.data:
+        _human_correlate(result.data)
+        return
+    if result.command == "narrative" and result.data:
+        _human_narrative(result.data)
+        return
     if result.data:
         for key, value in result.data.items():
             if key in ("evidence", "cases", "entries", "evidence_files"):
@@ -1060,6 +1218,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "rules": cmd_rules,
         "mitre": cmd_mitre,
         "sigma": cmd_sigma,
+        "correlate": cmd_correlate,
+        "narrative": cmd_narrative,
     }
     handler = handlers.get(args.command)
     if handler is None:  # pragma: no cover - argparse guards this
