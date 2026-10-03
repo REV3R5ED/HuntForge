@@ -88,6 +88,20 @@ CREATE TABLE IF NOT EXISTS audit (
     result_count INTEGER NOT NULL,
     status TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS findings (
+    id INTEGER PRIMARY KEY,
+    finding_uid TEXT NOT NULL,
+    rule_id TEXT NOT NULL,
+    rule_version TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    title TEXT NOT NULL,
+    confidence INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    evidence_json TEXT NOT NULL DEFAULT '[]',
+    explanation_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS findings_rule ON findings(rule_id);
+CREATE INDEX IF NOT EXISTS findings_severity ON findings(severity);
 """
 
 
@@ -374,6 +388,74 @@ class CaseDB:
                 "source_sha256": row["prov_source_sha256"],
             },
         }
+
+    # -- findings -------------------------------------------------------
+    def add_finding(self, finding: dict[str, Any]) -> str:
+        """Persist one detection finding; returns its case-scoped UID.
+
+        ``finding`` is a ``Finding.to_dict()`` mapping. UIDs are
+        sequential per case (``HF-0001``, ...).
+        """
+        count = self._conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
+        uid = f"HF-{int(count) + 1:04d}"
+        explanation = {
+            "why": finding.get("why", []),
+            "what": finding.get("what", ""),
+            "confidence_reason": finding.get("confidence_reason", ""),
+            "observed": finding.get("observed", []),
+            "inferred": finding.get("inferred", []),
+        }
+        self._conn.execute(
+            """INSERT INTO findings
+               (finding_uid, rule_id, rule_version, severity, title,
+                confidence, created_at, evidence_json, explanation_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                uid,
+                str(finding.get("rule_id", "")),
+                str(finding.get("rule_version", "")),
+                str(finding.get("severity", "")),
+                str(finding.get("title", "")),
+                int(finding.get("confidence", 0)),
+                utc_now_iso(),
+                json.dumps(finding.get("evidence", [])),
+                json.dumps(explanation),
+            ),
+        )
+        self._conn.commit()
+        return uid
+
+    def list_findings(
+        self, rule_id: str | None = None, severity: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Stored findings, oldest first, with optional filters."""
+        query = "SELECT * FROM findings"
+        clauses: list[str] = []
+        params: list[Any] = []
+        if rule_id:
+            clauses.append("rule_id = ?")
+            params.append(rule_id)
+        if severity:
+            clauses.append("severity = ?")
+            params.append(severity)
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY id ASC"
+        rows = self._conn.execute(query, params).fetchall()
+        return [
+            {
+                "finding_uid": r["finding_uid"],
+                "rule_id": r["rule_id"],
+                "rule_version": r["rule_version"],
+                "severity": r["severity"],
+                "title": r["title"],
+                "confidence": int(r["confidence"]),
+                "created_at": r["created_at"],
+                "evidence": json.loads(r["evidence_json"] or "[]"),
+                "explanation": json.loads(r["explanation_json"] or "{}"),
+            }
+            for r in rows
+        ]
 
     # -- audit ----------------------------------------------------------
     def audit(
