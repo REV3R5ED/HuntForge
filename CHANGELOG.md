@@ -3,6 +3,48 @@
 All notable changes to HuntForge are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-10-03
+
+### Added
+- MITRE ATT&CK mapping (`huntforge.mitre`, stdlib-only, fully offline,
+  registered in the plugin registry as `mitre` v0.6.0):
+  - Curated local technique table (`techniques.json`, 23 techniques
+    for endpoint forensics, stamped ATT&CK v16.1 Oct 2026 — a
+    documented subset, not the full matrix). Each entry carries its
+    name, tactics, a HuntForge-written description, and the
+    `(source, event_id)` pairs that can evidence it; techniques no
+    parser covers yet (T1003.001 LSASS, T1070.001/004) are listed with
+    empty sources as honest gaps.
+  - Every v0.5 detection rule mapped to its technique(s) (mapping
+    enforced by `validate_mapping()` in tests); the engine copies the
+    mapping onto findings and the case store persists `mitre` +
+    `provenance` (new columns, auto-migrated on old databases).
+  - `huntforge mitre --case ID`: technique coverage over stored
+    findings — techniques with findings (rules + finding UIDs),
+    gaps (no findings), and unobservable techniques. `--json` for
+    automation.
+  - `huntforge mitre techniques [--json]`: the curated table.
+  - `docs/ATTACK.md`: the table, per-rule mapping with reasoning,
+    coverage philosophy (technique *use*, never attribution), and
+    the Sigma-subset documentation.
+- Sigma-subset rule support (`huntforge.sigma`, stdlib-only,
+  registered as `sigma` v0.6.0):
+  - Documented JSON rule schema (title, id, logsource, detection
+    selections, condition, level, tags) plus a best-effort YAML
+    importer via a hand-written subset parser (flat shapes only;
+    tabs, flow collections, block scalars, anchors fail loudly).
+  - Supported: named selections (AND of fields, OR of values), `*`
+    wildcards, conditions (`selection`, `and`/`or`/`not`,
+    `1 of sel*`, `all of sel*`), Sigma field-name mapping,
+    logsource category filtering. Rejected at load time (never
+    silently): `|contains`-style modifiers, aggregations, `near`,
+    nested selections.
+  - `huntforge sigma list`: four bundled samples (3 JSON + 1 YAML).
+    `huntforge sigma run --case ID --rule FILE`: evaluates one rule,
+    persists findings (exit 1 when found) with provenance
+    `huntforge.sigma` v0.6.0; `attack.t*` tags become `mitre` IDs.
+  - 335 tests, 87.5% coverage.
+
 ## [0.5.0] - 2026-10-03
 
 ### Added

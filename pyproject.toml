@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "huntforge"
-version = "0.5.0"
+version = "0.6.0"
 description = "HuntForge — endpoint threat-hunting and Windows forensics platform: ingest endpoint telemetry, normalize into a common evidence model, reconstruct timelines, hunt with explainable detections."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -36,6 +36,9 @@ huntforge = "huntforge.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+huntforge = ["mitre/*.json", "sigma/samples/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

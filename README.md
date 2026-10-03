@@ -14,11 +14,12 @@ default, every detection is explainable with preserved evidence, humans
 make the final judgment, and observed facts are always distinguished
 from inference.
 
-## v0.5 — what works today
+## v0.6 — what works today
 
 - **Core CLI** (`huntforge`): `case create/show/list`, `ingest`,
   `events`, `registry`, `timeline`, `lineage`, `entities`, `detect`,
-  `rules list`, `audit`, `--version`. JSON output on every command
+  `rules list`, `mitre`, `mitre techniques`, `sigma list`,
+  `sigma run`, `audit`, `--version`. JSON output on every command
   (`--json`), structured exit codes (0 ok / 1 findings / 2 error).
 - **Normalized event model** (the v1.0-stable core): UTC-normalized
   timestamps with originals preserved, host/user, source + event id,
@@ -79,6 +80,26 @@ from inference.
   audit table. v0.1 databases gain the `flags` column automatically.
 - **Audit trail**: every CLI invocation touching a case is logged
   (command, args, timestamp, result count).
+- **ATT&CK mapping** (`huntforge mitre --case ID`, `huntforge mitre
+  techniques`): a curated local technique table (23 techniques,
+  versioned, ATT&CK v16.1 snapshot — a subset, documented as such,
+  fully offline). Every v0.5 detection rule is mapped to its
+  technique(s); findings carry `mitre` IDs and the case store
+  persists them. Coverage view shows techniques with findings, gaps
+  (no findings), and techniques not observable with current parsers
+  (e.g. LSASS access needs Sysmon 10). A mapped finding is evidence
+  of technique *use* — never attribution of intent. See
+  [docs/ATTACK.md](docs/ATTACK.md).
+- **Sigma-subset rules** (`huntforge sigma list`, `huntforge sigma run
+  --case ID --rule FILE`): documented JSON rule schema plus a
+  best-effort YAML importer (hand-written subset parser, stdlib-only).
+  Supported: named selections, `and`/`or`/`not` conditions,
+  `1 of sel*` / `all of sel*`, `*` wildcards, Sigma field-name
+  mapping, logsource filtering. Not supported (loud load-time
+  errors, never silent): `|contains`-style modifiers, aggregations,
+  `near`, nested selections. Four bundled samples; findings keep
+  provenance `huntforge.sigma` v0.6.0 and `attack.t*` tags become
+  `mitre` IDs.
 
 ## Quick start
 
@@ -105,13 +126,13 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - [x] **v0.3** — Prefetch, registry hives, scheduled tasks, services
 - [x] **v0.4** — Unified timeline, process lineage, entity views, gap reporting
 - [x] **v0.5** — Explainable detection rules (never label malicious from a heuristic alone)
-- [ ] **v0.6** — MITRE ATT&CK mapping, Sigma-compatible rule ingestion
+- [x] **v0.6** — MITRE ATT&CK mapping, Sigma-compatible rule ingestion
 - [ ] **v0.7** — Correlation engine, investigation graph export
 - [ ] **v0.8** — Case management (notes, findings, manifests, chain of custody), reports
 - [ ] **v0.9** — Analyst UI + ecosystem integrations (SentinelKit, LogLens, AegisForge)
 - [ ] **v1.0** — Stable schemas, release docs, benchmark/demo corpus, hardened plugin API
 
-## Limitations (v0.5)
+## Limitations (v0.6)
 
 - **Binary `.evtx` is not parsed**: the adapter detects it by magic
   bytes and prints the exact `wevtutil qe … /f:xml` command to export
@@ -130,12 +151,16 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - Parsers are validated against synthetic fixtures built to the
   published binary layouts; validation against live forensic copies
   is pending.
-- No ATT&CK mapping, correlation, or reports (v0.6+).
+- No correlation or reports (v0.7+).
   Amcache/Shimcache parsing is not yet implemented.
 - Detections are heuristics, not verdicts: no v0.5 rule emits
   `critical`, every finding separates observed facts from inferences,
   and confidence scores always carry their reasoning. Parser flags and
   the v0.4 views remain observations only.
+- ATT&CK table is a curated 23-technique subset (not the full
+  matrix); mappings are evidence of technique use, never attribution.
+  Sigma support is a documented subset — modifiers, aggregations,
+  and `near` are rejected at load time, never silently mis-evaluated.
 - Single-user local tool: the SQLite store has no access control;
   keep case directories on trusted storage.
 - Python 3.10–3.13, stdlib only (no third-party runtime dependencies).

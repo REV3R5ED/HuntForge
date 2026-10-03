@@ -29,6 +29,11 @@ Severity ordering for `--severity high+`: `informational < low < medium < high <
 Run the catalog: `huntforge detect --case CASE-001 [--rule ID] [--severity high+] [--explain]`
 List rules: `huntforge rules list`
 
+> v0.6: every rule below is mapped to MITRE ATT&CK technique(s) —
+> findings carry `mitre` IDs. See [ATTACK.md](ATTACK.md) for the
+> technique table, the per-rule mapping with reasoning, and the
+> coverage philosophy.
+
 ---
 
 ## HF-DET-ENCPSH — Encoded PowerShell execution · HIGH

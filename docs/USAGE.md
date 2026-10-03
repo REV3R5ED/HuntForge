@@ -3,6 +3,92 @@
 Scenario-driven walkthroughs for HuntForge. All output below is
 genuine — produced by running the commands against synthetic evidence.
 
+## Scenario (v0.6): ATT&CK mapping and Sigma rules
+
+The same intrusion chain (invoice doc → PowerShell `-enc` → outbound
+connection → dropped payload → Run-key persistence), now mapped to
+MITRE ATT&CK. Detections already ran (`huntforge detect` stores its
+findings in the case); v0.6 reads those stored findings and shows
+which techniques have evidence — and which don't.
+
+### 1. Technique coverage
+
+```console
+$ huntforge mitre --case CASE-006
+technique coverage: 5 of 23 techniques have findings (7 stored finding(s))
+  T1053.005 Scheduled Task/Job [Execution/Persistence/Privilege Escalation]
+    HF-DET-TASK x1
+    findings: HF-0007
+  T1059.001 PowerShell [Execution]
+    HF-DET-ENCPSH x2
+    findings: HF-0002, HF-0003
+  T1105 Ingress Tool Transfer [Command and Control]
+    HF-DET-DLPSH x1
+    findings: HF-0001
+  T1204.002 Malicious File [Execution]
+    HF-DET-OFFICE x2
+    findings: HF-0004, HF-0005
+  T1547.001 Registry Run Keys / Startup Folder [Persistence]
+    HF-DET-RUNKEY x1
+    findings: HF-0006
+  gaps (no findings in this case): T1003.001, T1016, T1021.001, T1033, …
+  not observable with current parsers: T1003.001, T1070.001, T1070.004
+```
+
+Five techniques evidenced, eighteen gaps. The gaps are honest: some
+techniques genuinely have no evidence here (no brute-forcing in this
+chain), and three — LSASS access, event-log clearing, file deletion —
+are techniques HuntForge *cannot* observe yet (the parsers don't read
+those event IDs). A gap is a gap in evidence, not proof of absence.
+Note what is *not* claimed: `T1566.001` (spearphishing attachment)
+stays a gap because HuntForge sees the Office execution, never the
+delivery email.
+
+### 2. Run a Sigma rule
+
+```console
+$ huntforge sigma run --case CASE-006 --rule hf-sigma-0001
+1 finding(s) from sigma rule hf-sigma-0001
+  [HF-0008] HIGH hf-sigma-0001 — Encoded PowerShell Command Line (confidence 70)
+    why: selection 'selection' matched (command_line matches '*-EncodedCommand*'; process_name matches '*powershell.exe')
+    evidence: event #4 (sysmon:1) — sigma selections matched: selection
+$ huntforge sigma list
+4 bundled sample rule(s)
+  hf-sigma-0001 [high] Encoded PowerShell Command Line (T1059.001) — encoded_powershell.json
+  hf-sigma-0002 [high] Office Application Spawning Shell (T1204.002) — office_spawns_shell.json
+  hf-sigma-0004 [low] Outbound Connection To Rare External Port (T1571) — rare_outbound_port.yaml
+  hf-sigma-0003 [medium] Run Key Persistence Registry Write (T1547.001) — runkey_persistence.json
+```
+
+Sigma findings persist like built-in ones (exit 1), keep provenance
+`huntforge.sigma` v0.6.0, and their `attack.t*` tags become `mitre`
+IDs — so `huntforge mitre --case` covers them too. Bare names resolve
+against the bundled samples; anything else takes a `.json`/`.yaml`
+path. The supported subset is documented in [ATTACK.md](ATTACK.md):
+unsupported Sigma features fail loudly at load time, never silently.
+
+### 3. Browse the table
+
+```console
+$ huntforge mitre techniques
+  T1059.001 PowerShell [Execution]
+    observable via: sysmon:1, evtx:Security:4688, powershell:4103, powershell:4104
+  …
+  T1003.001 LSASS Memory [Credential Access]
+    not observable with current parsers (coverage gap)
+```
+
+![HuntForge v0.6 ATT&CK coverage](images/06-mitre.png)
+
+### Honest limitations (v0.6)
+
+- The technique table is a curated 23-technique subset, not the full
+  ATT&CK matrix — stamped with its snapshot, versioned, offline.
+- A mapped finding is evidence of technique *use*, never attribution
+  of actor intent.
+- Sigma support is a subset: no `|contains`-style modifiers (use `*`
+  wildcards), no aggregations, no `near`, no nested selections.
+
 ## Scenario (v0.5): explainable detections
 
 The same intrusion chain (invoice doc → PowerShell `-enc` → outbound
