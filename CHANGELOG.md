@@ -3,6 +3,41 @@
 All notable changes to HuntForge are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] - 2026-10-03
+
+### Added
+- Cross-source correlation (`huntforge.correlate`, stdlib-only,
+  registered in the plugin registry as `correlate` v0.7.0):
+  - Four deterministic, explainable linkage heuristics
+    (`huntforge/correlate/linkages.py`), each INFERRED and carrying
+    confidence + reasoning + documented failure modes:
+    `same-process` (host+PID+image, 15-minute window, conf 90),
+    `same-file` (normalized path equality, conf 80; prefetch
+    basename match, conf 65), `persistence-execution` (Run key/task/
+    service target observed executing; conf 80 full-path, 60
+    basename), `download-execution` (connecting process wrote the
+    file that was then executed, strictly ordered within 15 minutes;
+    conf 85 with process-lineage support, 70 without).
+  - Activity clusters: connected components of linked events
+    (singletons reported as uncorrelated), ranked by finding
+    severity then finding/event count; findings attach to the
+    cluster holding most of their evidence; techniques resolved
+    from the ATT&CK table.
+  - `huntforge correlate --case ID`: ranked cluster list with
+    linkage kinds, severities, techniques. `huntforge narrative
+    --case ID --cluster N`: full attack narrative — OBSERVED
+    timeline, INFERRED linkages, detections, techniques, entities,
+    and a "what's missing" section (expected-but-unobserved
+    evidence: missing prefetch, unexecuted persistence targets,
+    external connections with no follow-up activity, created-but-
+    never-executed files). Cluster confidence is the weakest
+    linkage, named explicitly.
+  - Untimed events are never linked (they cannot be ordered).
+  - `docs/CORRELATION.md`: every heuristic, its confidence basis,
+    and its failure modes.
+- `docs/USAGE.md`: v0.7 scenario — correlating the intrusion chain
+  into one narrative — with a genuine terminal screenshot.
+
 ## [0.6.0] - 2026-10-03
 
 ### Added

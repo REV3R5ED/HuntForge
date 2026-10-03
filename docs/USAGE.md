@@ -3,6 +3,92 @@
 Scenario-driven walkthroughs for HuntForge. All output below is
 genuine — produced by running the commands against synthetic evidence.
 
+## Scenario (v0.7): correlating the intrusion chain into one narrative
+
+The same intrusion chain (invoice doc → PowerShell `-enc` → outbound
+connection → dropped payload → Run-key persistence), now correlated
+*across sources*. Twelve events went in — Sysmon process, network and
+file telemetry, a prefetch entry, registry Run keys. v0.7's linkage
+heuristics join four of them into one activity cluster; the rest stay
+honestly uncorrelated.
+
+### 1. Correlate the case
+
+```console
+$ huntforge correlate --case CASE-007
+1 activity cluster(s) from 12 event(s), 3 linkage(s)
+  [0] confidence 80 — 4 event(s), findings: 2 high, 1 medium [T1059.001, T1204.002, T1547.001]
+      same-process: #4 <-> #5 (INFERRED, conf 90)
+      same-process: #5 <-> #6 (INFERRED, conf 90)
+      same-file: #6 <-> #9 (INFERRED, conf 80)
+  linkages: same-file: 1, same-process: 2
+  uncorrelated events: 8
+  note: linkages are INFERRED hypotheses; events are OBSERVED facts
+```
+
+Three linkages, all labeled INFERRED: the PowerShell process creation
+(#4) and its outbound connection (#5) share host + PID + image 21
+seconds apart; the file write (#6) is the same process instance
+again; and the Run-key value (#9) points at the exact normalized path
+of the dropped file. Eight events didn't link — a second Run key for
+a binary never seen executing, a service with a writable image, a
+prefetch entry whose executable doesn't match — and HuntForge says so
+instead of forcing them into the story.
+
+### 2. Read the narrative
+
+```console
+$ huntforge narrative --case CASE-007 --cluster 0
+cluster 0: powershell.exe on WS-FIN-014: 4 event(s), 3 finding(s); top finding: Run-key persistence (medium) (confidence 80)
+  powershell.exe on WS-FIN-014: 4 event(s), 3 finding(s); top finding: Run-key persistence (medium)
+  confidence 80: weakest linkage: same-file (events #6/#9, confidence 80)
+  OBSERVED (4 events):
+    2026-10-02T09:12:41Z [#4] sysmon:1 powershell.exe (pid 7422): powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand aQBmACgAWwBJAG
+    2026-10-02T09:13:02Z [#5] sysmon:3 powershell.exe (pid 7422); -> 203.0.113.44:443
+    2026-10-02T09:13:20Z [#6] sysmon:11 powershell.exe (pid 7422); file C:\Users\m.alvarez\AppData\Local\Temp\svchost.exe
+    2026-10-02T09:14:55Z [#9] registry:run-key svchost.exe: C:\Users\m.alvarez\AppData\Local\Temp\svchost.exe /silent; file C:\Users\m.alvarez\AppData\Local\Temp\svchost.exe; registry Software\Microsoft\Windows\CurrentVersion\Run\Updater
+  INFERRED linkages (3):
+    [same-process] events #4 and #5 are hypothesized to describe the same activity (same-process): same host (ws-fin-014), PID 7422, and image (powershell.exe); 21s apart
+        confidence 90: host + numeric PID + image basename all agree within a 15-minute window; distinct process instances rarely share all three
+    [same-process] events #5 and #6 are hypothesized to describe the same activity (same-process): same host (ws-fin-014), PID 7422, and image (powershell.exe); 18s apart
+        confidence 90: host + numeric PID + image basename all agree within a 15-minute window; distinct process instances rarely share all three
+    [same-file] events #6 and #9 are hypothesized to describe the same activity (same-file): same normalized file path: c:\users\m.alvarez\appdata\local\temp\svchost.exe
+        confidence 80: exact normalized path agreement across two events; unrelated events rarely reference the identical path
+  detections (3):
+    [HF-0001] high Encoded PowerShell execution (conf 80)
+    [HF-0002] high Office application spawning shell/script interpreter (conf 70)
+    [HF-0005] medium Run-key persistence (conf 60)
+  techniques:
+    T1059.001 PowerShell
+    T1204.002 Malicious File
+    T1547.001 Registry Run Keys / Startup Folder
+  entities (11):
+    file: c:\users\m.alvarez\appdata\local\temp\svchost.exe (2 observation(s))
+    …
+  what's missing (2):
+    - file C:\Users\m.alvarez\AppData\Local\Temp\svchost.exe was created but never observed executing — it may be dormant, deleted before execution, or executed outside collection
+    - persistence points to C:\Users\m.alvarez\AppData\Local\Temp\svchost.exe, but C:\Users\m.alvarez\AppData\Local\Temp\svchost.exe was never observed executing in this case — the payload may not have run yet, or execution evidence was not collected
+```
+
+The narrative keeps OBSERVED and INFERRED in separate sections, shows
+its work for every linkage (basis, confidence *with reasoning*, and
+the failure modes live in [CORRELATION.md](CORRELATION.md)), and ends
+with what's missing instead of pretending the picture is complete.
+Cluster confidence is the weakest linkage — 80 here, named
+explicitly — never an average that would hide the doubt.
+
+![HuntForge v0.7 correlation](images/07-correlate.png)
+
+### Honest limitations (v0.7)
+
+- Linkages are deterministic hypotheses, not evidence: PID reuse,
+  basename collisions, and temporal coincidence are documented
+  failure modes for each heuristic.
+- Untimed events are never linked — without a real timestamp, any
+  temporal claim would be invented.
+- Correlation never changes detections: findings still come from
+  `huntforge detect`; clusters only organize them.
+
 ## Scenario (v0.6): ATT&CK mapping and Sigma rules
 
 The same intrusion chain (invoice doc → PowerShell `-enc` → outbound

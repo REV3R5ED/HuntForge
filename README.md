@@ -14,7 +14,7 @@ default, every detection is explainable with preserved evidence, humans
 make the final judgment, and observed facts are always distinguished
 from inference.
 
-## v0.6 — what works today
+## v0.7 — what works today
 
 - **Core CLI** (`huntforge`): `case create/show/list`, `ingest`,
   `events`, `registry`, `timeline`, `lineage`, `entities`, `detect`,
@@ -100,6 +100,25 @@ from inference.
   `near`, nested selections. Four bundled samples; findings keep
   provenance `huntforge.sigma` v0.6.0 and `attack.t*` tags become
   `mitre` IDs.
+- **Cross-source correlation** (`huntforge correlate --case ID`,
+  `huntforge narrative --case ID --cluster N`): deterministic,
+  explainable linkage heuristics join events across sources into
+  activity clusters —
+  - `same-process`: same host + PID + image within 15 minutes
+    (process creation ↔ its network connection),
+  - `same-file`: normalized path agreement (file creation ↔ process
+    image ↔ prefetch entry; prefetch links are basename-based),
+  - `persistence-execution`: a Run key / task / service whose target
+    was observed executing,
+  - `download-execution`: the connecting process wrote a file that
+    was then executed (strictly ordered, 15-minute window; higher
+    confidence with process-lineage support).
+  Clusters are ranked by finding severity, carry the cluster's
+  detections, entities, and ATT&CK techniques, and each narrative
+  keeps OBSERVED events and INFERRED linkages in separate sections
+  with a "what's missing" section (expected-but-unobserved evidence).
+  Cluster confidence is the weakest linkage — documented, never
+  averaged away. See [docs/CORRELATION.md](docs/CORRELATION.md).
 
 ## Quick start
 
@@ -127,12 +146,12 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - [x] **v0.4** — Unified timeline, process lineage, entity views, gap reporting
 - [x] **v0.5** — Explainable detection rules (never label malicious from a heuristic alone)
 - [x] **v0.6** — MITRE ATT&CK mapping, Sigma-compatible rule ingestion
-- [ ] **v0.7** — Correlation engine, investigation graph export
+- [x] **v0.7** — Correlation engine, attack narratives (linkages labeled INFERRED)
 - [ ] **v0.8** — Case management (notes, findings, manifests, chain of custody), reports
 - [ ] **v0.9** — Analyst UI + ecosystem integrations (SentinelKit, LogLens, AegisForge)
 - [ ] **v1.0** — Stable schemas, release docs, benchmark/demo corpus, hardened plugin API
 
-## Limitations (v0.6)
+## Limitations (v0.7)
 
 - **Binary `.evtx` is not parsed**: the adapter detects it by magic
   bytes and prints the exact `wevtutil qe … /f:xml` command to export
@@ -151,8 +170,13 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - Parsers are validated against synthetic fixtures built to the
   published binary layouts; validation against live forensic copies
   is pending.
-- No correlation or reports (v0.7+).
+- No reports yet (v0.8).
   Amcache/Shimcache parsing is not yet implemented.
+- **Correlation is inference, not evidence**: linkages are
+  deterministic hypotheses with documented failure modes
+  (PID reuse, basename collisions, temporal coincidence). The
+  narrative labels them INFERRED; only the events are OBSERVED.
+  Untimed events are never linked (they cannot be ordered).
 - Detections are heuristics, not verdicts: no v0.5 rule emits
   `critical`, every finding separates observed facts from inferences,
   and confidence scores always carry their reasoning. Parser flags and
@@ -169,7 +193,7 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 
 ```bash
 python -m pip install -e '.[dev]'
-pytest -q            # 272 tests, 88%+ coverage, 80% gate
+pytest -q            # 369 tests, 87%+ coverage, 80% gate
 ruff check . && ruff format --check . && mypy src
 ```
 
