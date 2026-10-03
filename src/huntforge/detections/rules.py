@@ -919,6 +919,7 @@ def _rule(
     false_positives: str,
     evidence_requirements: str,
     evaluate: object,
+    mitre: list[str],
 ) -> Rule:
     return Rule(
         id=id,
@@ -931,6 +932,7 @@ def _rule(
         false_positives=false_positives,
         evidence_requirements=evidence_requirements,
         evaluate=evaluate,  # type: ignore[arg-type]
+        mitre=mitre,
     )
 
 
@@ -962,6 +964,7 @@ RULES: list[Rule] = [
             "auditing) this rule cannot fire."
         ),
         evaluate=_eval_encoded_powershell,
+        mitre=["T1059.001"],
     ),
     _rule(
         id="HF-DET-DLPSH",
@@ -995,6 +998,7 @@ RULES: list[Rule] = [
             "normalized event; the full text stays in the evidence file."
         ),
         evaluate=_eval_powershell_download,
+        mitre=["T1105"],
     ),
     _rule(
         id="HF-DET-OFFICE",
@@ -1021,6 +1025,7 @@ RULES: list[Rule] = [
             "or Security 4688 with parent process name)."
         ),
         evaluate=_eval_office_shell_spawn,
+        mitre=["T1204.002"],
     ),
     _rule(
         id="HF-DET-RUNKEY",
@@ -1061,6 +1066,7 @@ RULES: list[Rule] = [
             "in the same case."
         ),
         evaluate=_eval_runkey_persistence,
+        mitre=["T1547.001"],
     ),
     _rule(
         id="HF-DET-SVC",
@@ -1083,6 +1089,7 @@ RULES: list[Rule] = [
         ),
         evidence_requirements="Service definitions (offline Services export).",
         evaluate=_eval_service_writable,
+        mitre=["T1543.003"],
     ),
     _rule(
         id="HF-DET-TASK",
@@ -1104,6 +1111,7 @@ RULES: list[Rule] = [
         ),
         evidence_requirements="Scheduled-task XML exports.",
         evaluate=_eval_task_writable,
+        mitre=["T1053.005"],
     ),
     _rule(
         id="HF-DET-RAREPORT",
@@ -1130,6 +1138,7 @@ RULES: list[Rule] = [
             "lookup is performed (offline by design)."
         ),
         evaluate=_eval_rare_external_port,
+        mitre=["T1571"],
     ),
     _rule(
         id="HF-DET-BRUTE",
@@ -1155,6 +1164,7 @@ RULES: list[Rule] = [
             "Security log 4625 events with timestamps, target user, and source IP."
         ),
         evaluate=_eval_logon_burst,
+        mitre=["T1110"],
     ),
     _rule(
         id="HF-DET-ADMINHOST",
@@ -1181,6 +1191,7 @@ RULES: list[Rule] = [
             "Needs enough history to establish 'normal' sources."
         ),
         evaluate=_eval_admin_new_host,
+        mitre=["T1078"],
     ),
     _rule(
         id="HF-DET-TEMPEXEC",
@@ -1204,6 +1215,7 @@ RULES: list[Rule] = [
             "Security 4688 with command-line auditing)."
         ),
         evaluate=_eval_tempdir_execution,
+        mitre=["T1204.002"],
     ),
 ]
 
