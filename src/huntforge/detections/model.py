@@ -111,6 +111,12 @@ class Finding:
     observed: list[str] = field(default_factory=list)
     inferred: list[str] = field(default_factory=list)
     finding_uid: str = ""
+    # v0.6: ATT&CK technique IDs this finding evidences (e.g. ["T1059.001"]).
+    # Evidence of technique *use*, never attribution of actor intent.
+    mitre: list[str] = field(default_factory=list)
+    # Provenance of the finding producer: "huntforge.detections" for the
+    # built-in rule catalog, "huntforge.sigma" for Sigma-converted rules.
+    provenance: str = "huntforge.detections"
 
     def __post_init__(self) -> None:
         if not self.evidence:
@@ -134,6 +140,8 @@ class Finding:
             "evidence": [e.to_dict() for e in self.evidence],
             "observed": list(self.observed),
             "inferred": list(self.inferred),
+            "mitre": list(self.mitre),
+            "provenance": self.provenance,
         }
 
 
@@ -158,6 +166,9 @@ class Rule:
     false_positives: str
     evidence_requirements: str
     evaluate: Callable[[list[dict[str, Any]], Rule], list[Finding]]
+    # v0.6: ATT&CK technique IDs this rule evidences. Mapping is curated
+    # and documented in docs/ATTACK.md; the engine copies it onto findings.
+    mitre: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -172,4 +183,5 @@ class Rule:
             "logic": self.logic,
             "false_positives": self.false_positives,
             "evidence_requirements": self.evidence_requirements,
+            "mitre": list(self.mitre),
         }

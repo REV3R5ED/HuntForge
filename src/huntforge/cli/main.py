@@ -2,7 +2,7 @@
 ``huntforge events ...`` / ``huntforge registry ...`` /
 ``huntforge timeline ...`` / ``huntforge lineage ...`` /
 ``huntforge entities ...`` / ``huntforge detect ...`` /
-``huntforge rules ...``.
+``huntforge rules ...`` / ``huntforge mitre ...`` / ``huntforge sigma ...``.
 
 Every command returns a shared result envelope, renders human-readable
 text by default (``--json`` for automation), uses structured exit
@@ -25,6 +25,8 @@ from pathlib import Path
 from typing import Any
 
 from huntforge import __version__
+from huntforge import mitre as mitre_mod
+from huntforge import sigma as sigma_mod
 from huntforge.cases.service import CaseService
 from huntforge.core import config as config_mod
 from huntforge.core import plugins as plugins_mod
@@ -67,6 +69,8 @@ plugins_mod.register(
             "entities",
             "detect",
             "rules",
+            "mitre",
+            "sigma",
         ],
     )
 )
@@ -266,6 +270,28 @@ def build_parser() -> argparse.ArgumentParser:
     rules_p = sub.add_parser("rules", help="Detection rule catalog")
     rules_sub = rules_p.add_subparsers(dest="rules_command", required=True)
     rules_sub.add_parser("list", help="List all detection rules")
+
+    mitre_p = sub.add_parser("mitre", help="ATT&CK technique coverage for a case")
+    mitre_p.add_argument(
+        "--case",
+        default=None,
+        help="Case identifier (coverage over its stored findings)",
+    )
+    mitre_sub = mitre_p.add_subparsers(dest="mitre_command")
+    mitre_sub.add_parser("techniques", help="List the curated ATT&CK technique table")
+
+    sigma_p = sub.add_parser("sigma", help="Sigma-subset rules")
+    sigma_sub = sigma_p.add_subparsers(dest="sigma_command", required=True)
+    sigma_sub.add_parser("list", help="List bundled sample Sigma rules")
+    sigma_run_p = sigma_sub.add_parser(
+        "run", help="Evaluate one Sigma rule over a case"
+    )
+    sigma_run_p.add_argument("--case", required=True, help="Case identifier")
+    sigma_run_p.add_argument(
+        "--rule",
+        required=True,
+        help="Rule file (.json/.yaml/.yml) or bundled sample name",
+    )
 
     return parser
 
@@ -659,6 +685,111 @@ def cmd_rules(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | 
     return result, None
 
 
+def cmd_mitre(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | None]:
+    table = mitre_mod.TABLE
+    if args.mitre_command == "techniques":
+        result = Result(command="mitre techniques")
+        result.data = table.to_dict()
+        result.summary = (
+            f"{len(table.techniques)} technique(s) "
+            f"({table.attack_snapshot}; curated subset)"
+        )
+        return result, None
+    # Coverage mode: needs a case.
+    if not args.case:
+        result = Result(command="mitre")
+        result.fail("provide --case for coverage, or 'mitre techniques'")
+        return result, None
+    result = Result(command="mitre")
+    service = CaseService(state_dir)
+    try:
+        db = service.open_db(args.case)
+    except CaseError as exc:
+        result.fail(str(exc))
+        return result, None
+    try:
+        stored = db.list_findings()
+        coverage = mitre_mod.coverage_from_findings(stored)
+        covered_ids = {entry["technique_id"] for entry in coverage["covered"]}
+        # Enrich covered entries with technique metadata.
+        for entry in coverage["covered"]:
+            technique = table.get(entry["technique_id"])
+            entry["name"] = technique.name
+            entry["tactics"] = list(technique.tactics)
+            # Which stored findings (UIDs) evidence this technique.
+            entry["findings"] = [
+                str(f["finding_uid"])
+                for f in stored
+                if entry["technique_id"] in [str(t).upper() for t in f["mitre"]]
+            ]
+        gaps = [tid for tid in table.ids() if tid not in covered_ids]
+        unobservable = [t.id for t in table.techniques if not t.huntforge_sources]
+        result.data = {
+            "case": args.case,
+            "attack_snapshot": table.attack_snapshot,
+            "data_version": table.data_version,
+            "stored_findings": len(stored),
+            "technique_count": len(table.techniques),
+            **coverage,
+            "gaps": gaps,
+            "unobservable": unobservable,
+        }
+        result.summary = (
+            f"technique coverage: {coverage['covered_count']} of "
+            f"{len(table.techniques)} techniques have findings "
+            f"({len(stored)} stored finding(s))"
+        )
+        if not stored:
+            result.summary += " — run 'huntforge detect' first"
+    finally:
+        db.close()
+    return result, args.case
+
+
+def cmd_sigma(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | None]:
+    if args.sigma_command == "list":
+        result = Result(command="sigma list")
+        samples = sigma_mod.list_samples()
+        result.data = {"rules": samples, "count": len(samples)}
+        result.summary = f"{len(samples)} bundled sample rule(s)"
+        return result, None
+    # sigma run
+    result = Result(command="sigma run")
+    service = CaseService(state_dir)
+    try:
+        db = service.open_db(args.case)
+    except CaseError as exc:
+        result.fail(str(exc))
+        return result, None
+    try:
+        try:
+            rule = sigma_mod.load_rule_file(args.rule)
+        except sigma_mod.SigmaError as exc:
+            result.fail(str(exc))
+            return result, args.case
+        findings = sigma_mod.evaluate_rule(rule, db.all_events())
+        stored: list[dict[str, Any]] = []
+        for finding in findings:
+            data = finding.to_dict()
+            data["finding_uid"] = db.add_finding(data)
+            stored.append(data)
+        result.findings = stored
+        result.data = {
+            "rule_id": rule.id,
+            "rule_title": rule.title,
+            "count": len(findings),
+            "techniques": finding.mitre if findings else [],
+        }
+        if findings:
+            result.summary = f"{len(findings)} finding(s) from sigma rule {rule.id}"
+            result.status = "warning"  # findings are the product: exit 1
+        else:
+            result.summary = f"sigma rule {rule.id}: no matches"
+    finally:
+        db.close()
+    return result, args.case
+
+
 def _human_detect(
     data: dict[str, Any], findings: list[dict[str, Any]], explain: bool
 ) -> None:
@@ -699,6 +830,63 @@ def _human_rules(data: dict[str, Any]) -> None:
     for rule in data.get("rules") or []:
         print(f"  {rule['id']} [{rule['severity']}] — {rule['title']}")
         print(f"    {rule['description']}")
+        techniques = rule.get("mitre") or []
+        if techniques:
+            print(f"    ATT&CK: {', '.join(techniques)}")
+
+
+def _human_mitre(data: dict[str, Any]) -> None:
+    if "techniques" in data and "covered" not in data:
+        # `mitre techniques` listing.
+        for technique in data["techniques"]:
+            tactics = "/".join(technique["tactics"])
+            sources = technique.get("huntforge_sources") or []
+            if sources:
+                via = ", ".join(f"{s['source']}:{s['event_id']}" for s in sources)
+                print(f"  {technique['id']} {technique['name']} [{tactics}]")
+                print(f"    observable via: {via}")
+            else:
+                print(f"  {technique['id']} {technique['name']} [{tactics}]")
+                print("    not observable with current parsers (coverage gap)")
+        return
+    # Coverage view.
+    for entry in data.get("covered") or []:
+        tactics = "/".join(entry.get("tactics") or [])
+        print(f"  {entry['technique_id']} {entry['name']} [{tactics}]")
+        for rule_id, count in sorted((entry.get("rules") or {}).items()):
+            print(f"    {rule_id} x{count}")
+        findings = entry.get("findings") or []
+        if findings:
+            print(f"    findings: {', '.join(findings)}")
+    gaps = data.get("gaps") or []
+    if gaps:
+        print(f"  gaps (no findings in this case): {', '.join(gaps)}")
+    unobservable = data.get("unobservable") or []
+    if unobservable:
+        print(f"  not observable with current parsers: {', '.join(unobservable)}")
+    unknown = data.get("unknown_technique_ids") or []
+    if unknown:
+        print(f"  unknown technique references: {', '.join(unknown)}")
+    if not data.get("stored_findings"):
+        print("  hint: run 'huntforge detect --case ID' to record findings")
+
+
+def _human_sigma(data: dict[str, Any], findings: list[dict[str, Any]]) -> None:
+    rules = data.get("rules")
+    if rules is not None:
+        for rule in rules:
+            if "error" in rule:
+                print(f"  {rule.get('file')}: ERROR — {rule['error']}")
+                continue
+            techniques = rule.get("techniques") or []
+            tech = f" ({', '.join(techniques)})" if techniques else ""
+            print(
+                f"  {rule['id']} [{rule['level']}] {rule['title']}{tech} "
+                f"— {Path(rule.get('source_path') or '').name}"
+            )
+        return
+    # `sigma run`: same shape as detect.
+    _human_detect(data, findings, explain=False)
 
 
 def _human_registry(data: dict[str, Any]) -> None:
@@ -806,6 +994,12 @@ def render(
     if result.command == "rules list" and result.data:
         _human_rules(result.data)
         return
+    if result.command in ("mitre", "mitre techniques") and result.data:
+        _human_mitre(result.data)
+        return
+    if result.command in ("sigma list", "sigma run") and result.data:
+        _human_sigma(result.data, result.findings)
+        return
     if result.data:
         for key, value in result.data.items():
             if key in ("evidence", "cases", "entries", "evidence_files"):
@@ -864,6 +1058,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "entities": cmd_entities,
         "detect": cmd_detect,
         "rules": cmd_rules,
+        "mitre": cmd_mitre,
+        "sigma": cmd_sigma,
     }
     handler = handlers.get(args.command)
     if handler is None:  # pragma: no cover - argparse guards this

@@ -42,6 +42,10 @@ class DetectionEngine:
                     finding.severity.rank() < min_severity.rank()
                 ):
                     continue
+                # v0.6: ATT&CK mapping rides along from the rule unless the
+                # finding already carries its own (e.g. Sigma conversions).
+                if not finding.mitre:
+                    finding.mitre = list(rule.mitre)
                 findings.append(finding)
         findings.sort(key=lambda f: (-f.severity.rank(), f.rule_id))
         # Stable per-run UIDs; the CLI re-numbers when persisting.
