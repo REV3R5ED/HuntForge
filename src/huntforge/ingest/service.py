@@ -1,14 +1,16 @@
-"""HuntForge evidence ingestion (v0.2: evidence registry + telemetry parsers).
+"""HuntForge evidence ingestion (v0.3: evidence registry + artifact parsers).
 
-v0.2 ingest registers evidence files — hashing every file (SHA-256 +
+v0.3 ingest registers evidence files — hashing every file (SHA-256 +
 MD5) and recording size, ingest time and parser name in the case's
-evidence table — and then parses recognized telemetry (Sysmon,
-Security log, PowerShell, exported Windows Event XML/JSON) into
-normalized events with full provenance. Source files are never
-modified. Binary ``.evtx`` files are detected by magic bytes and
-reported as warnings (export to XML with ``wevtutil`` first); they are
-still registered as evidence. Normalized events can also be loaded
-from JSONL fixtures with ``--fixture``.
+evidence table — and then parses recognized artifacts (Sysmon,
+Security log, PowerShell, exported Windows Event XML/JSON, Prefetch
+binaries, offline registry hives, Task Scheduler XML, services
+JSON/registry) into normalized events with full provenance. Source
+files are never modified. Binary ``.evtx`` files and compressed (MAM)
+prefetch are detected by magic bytes and reported as warnings with
+export/decompression guidance; they are still registered as evidence.
+Normalized events can also be loaded from JSONL fixtures with
+``--fixture``.
 """
 
 from __future__ import annotations

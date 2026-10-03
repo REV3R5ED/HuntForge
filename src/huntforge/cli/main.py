@@ -1,5 +1,5 @@
 """HuntForge CLI: ``huntforge case ...`` / ``huntforge ingest ...`` /
-``huntforge events ...``.
+``huntforge events ...`` / ``huntforge registry ...``.
 
 Every command returns a shared result envelope, renders human-readable
 text by default (``--json`` for automation), uses structured exit
@@ -7,11 +7,9 @@ codes (0 ok / 2 error; 1 is reserved for future detection findings),
 and writes an audit record to the case when one is involved.
 Diagnostics go to stderr; stdout carries only the requested output.
 
-v0.1 is the foundation: case lifecycle, evidence ingest with real
-hashing and provenance, a JSONL fixture loader for tests and early
-use, and filtered queries over the normalized event store. Parsers,
-timeline, detections, ATT&CK/Sigma, correlation, reports and the UI
-arrive in later phases per the master plan.
+v0.3 adds persistence-artifact parsers (Prefetch, offline registry
+hives, scheduled tasks, services) and a ``registry`` command for
+targeted reads of offline hives.
 """
 
 from __future__ import annotations
@@ -35,6 +33,8 @@ from huntforge.core.results import (
 )
 from huntforge.events.query import EventQuery
 from huntforge.ingest.service import ingest_path, load_fixture
+from huntforge.parsers import SOURCE_KINDS
+from huntforge.parsers.registry import Hive, HiveError, KeyNotFoundError
 from huntforge.store.db import CaseDB, CaseError
 
 plugins_mod.register(
@@ -42,7 +42,7 @@ plugins_mod.register(
         name="core",
         description="Core CLI, normalized event model, case store, ingest",
         version=__version__,
-        commands=["case", "ingest", "events", "version"],
+        commands=["case", "ingest", "events", "registry", "audit", "version"],
     )
 )
 
@@ -120,7 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ingest_p.add_argument(
         "--source",
-        choices=["sysmon", "security", "powershell", "evtx-xml"],
+        choices=list(SOURCE_KINDS),
         default=None,
         help=(
             "Force one telemetry source kind for every file "
@@ -160,6 +160,14 @@ def build_parser() -> argparse.ArgumentParser:
     audit_p = sub.add_parser("audit", help="Show a case's audit log")
     audit_p.add_argument("--case", required=True, help="Case identifier")
     audit_p.add_argument("--limit", type=int, default=50, help="Max rows (default 50)")
+
+    registry_p = sub.add_parser(
+        "registry", help="Read an offline registry hive (forensic copy)"
+    )
+    registry_p.add_argument("hive", help="Path to the hive file (e.g. NTUSER.DAT)")
+    registry_p.add_argument(
+        "key", help=r"Key path, e.g. Software\Microsoft\Windows\CurrentVersion\Run"
+    )
 
     return parser
 
@@ -323,6 +331,47 @@ def cmd_audit(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | 
     return result, args.case
 
 
+def cmd_registry(
+    args: argparse.Namespace, state_dir: Path
+) -> tuple[Result, str | None]:
+    result = Result(command="registry")
+    try:
+        data = Path(args.hive).expanduser().read_bytes()
+    except OSError as exc:
+        result.fail(f"cannot read hive file: {exc}")
+        return result, None
+    try:
+        view = Hive(data).list_key(args.key)
+    except KeyNotFoundError as exc:
+        result.fail(str(exc))
+        return result, None
+    except HiveError as exc:
+        result.fail(f"cannot parse hive: {exc}")
+        return result, None
+    result.data = view.to_dict()
+    result.summary = (
+        f"{view.path}: {len(view.subkeys)} subkey(s), {len(view.values)} value(s)"
+    )
+    return result, None  # no case involved: no audit record
+
+
+def _human_registry(data: dict[str, Any]) -> None:
+    print(f"  path: {data.get('path')}")
+    print(f"  last_write: {data.get('last_write') or '-'}")
+    subkeys = data.get("subkeys") or []
+    print(f"  subkeys ({len(subkeys)}):")
+    for subkey in subkeys:
+        print(f"    {subkey}")
+    values = data.get("values") or []
+    print(f"  values ({len(values)}):")
+    for value in values:
+        val_data = value.get("data")
+        if isinstance(val_data, list):
+            val_data = " | ".join(val_data)
+        name = value.get("name") or "(default)"
+        print(f"    {name} [{value.get('type_name')}] = {val_data}")
+
+
 def render(result: Result, as_json: bool) -> None:
     if as_json:
         _print_json(result)
@@ -331,6 +380,9 @@ def render(result: Result, as_json: bool) -> None:
         print(f"error: {result.summary}", file=sys.stderr)
         return
     print(result.summary or "ok")
+    if result.command == "registry" and result.data:
+        _human_registry(result.data)
+        return
     if result.data:
         for key, value in result.data.items():
             if key in ("evidence", "cases", "entries", "evidence_files"):
@@ -383,6 +435,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "ingest": cmd_ingest,
         "events": cmd_events,
         "audit": cmd_audit,
+        "registry": cmd_registry,
     }
     handler = handlers.get(args.command)
     if handler is None:  # pragma: no cover - argparse guards this

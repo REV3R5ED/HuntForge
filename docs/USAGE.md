@@ -3,6 +3,126 @@
 Scenario-driven walkthroughs for HuntForge. All output below is
 genuine — produced by running the commands against synthetic evidence.
 
+## Scenario (v0.3): persistence artifacts
+
+A workstation was reimaged, but you kept forensic copies: a Prefetch
+file, an `NTUSER.DAT`, a Task Scheduler export and a service listing.
+HuntForge parses them offline — it never touches the live system —
+and normalizes everything into the same event model as the v0.2
+telemetry.
+
+### 1. Create a case and ingest
+
+```console
+$ huntforge case create CASE-003 --name "Persistence hunt"
+case 'CASE-003' created
+$ huntforge ingest ./evidence-persist --case CASE-003
+registered 4 evidence file(s), parsed 10 event(s) [prefetch: 1, registry: 5, services: 3, tasks: 1]
+  #1 malware_run.pf sha256=065b75661ef09943…
+  #2 services_export.json sha256=74afc2a2fdb2ba34…
+  #3 synthetic_hive.dat sha256=1f4f2c3f539dacc4…
+  #4 task_malicious.xml sha256=e4004ca3290c4c81…
+```
+
+Source kinds are auto-detected by content: `SCCA` magic for Prefetch,
+`regf` magic for hives, the `<Task>` root for Task Scheduler XML, and
+`"image_path"` fields for service listings. Override with
+`--source prefetch|registry|tasks|services`.
+
+### 2. What ran? Ask Prefetch
+
+Each `.pf` file becomes one execution-evidence event — executable,
+run count, most recent run:
+
+```console
+$ huntforge events --case CASE-003 --keyword MALWARE
+1 event(s) match
+[1] 2026-10-01T08:30:00Z prefetch:prefetch host=- user=- process=MALWARE.EXE(-)
+      file_path: MALWARE.EXE
+```
+
+The event's `raw` field records `run_count=14` and the referenced-file
+count. Prefetch versions 23/26/30 are supported; compressed (MAM)
+prefetch is rejected with a clean error.
+
+### 3. Read the hive directly
+
+`huntforge registry` reads forensic hive copies without a case —
+list subkeys and decode values (`REG_SZ`, `REG_DWORD`, `REG_BINARY`,
+`REG_MULTI_SZ`, `REG_EXPAND_SZ`, `REG_QWORD`):
+
+```console
+$ huntforge registry NTUSER.DAT 'Software\Microsoft\Windows\CurrentVersion\Run'
+Software\Microsoft\Windows\CurrentVersion\Run: 0 subkey(s), 2 value(s)
+  path: Software\Microsoft\Windows\CurrentVersion\Run
+  last_write: 2026-09-15T08:30:00Z
+  subkeys (0):
+  values (2):
+    Updater [REG_SZ] = C:\Users\test\AppData\Roaming\updater.exe --silent
+    BadThing [REG_SZ] = C:\Temp\evil.exe
+```
+
+Ingest also scans every hive for persistence automatically: `Run` /
+`RunOnce` values become `registry:run-key` events timestamped by the
+key's last-write time:
+
+```console
+$ huntforge events --case CASE-003 --event-id run-key --limit 2
+2 event(s) match
+[5] 2026-09-15T08:30:00Z registry:run-key host=- user=- process=updater.exe(-)
+      command_line: C:\Users\test\AppData\Roaming\updater.exe --silent
+      registry_key: Software\Microsoft\Windows\CurrentVersion\Run\Updater
+[6] 2026-09-15T08:30:00Z registry:run-key host=- user=- process=evil.exe(-)
+      command_line: C:\Temp\evil.exe
+      registry_key: Software\Microsoft\Windows\CurrentVersion\Run\BadThing
+```
+
+### 4. Services and scheduled tasks
+
+Services come from a JSON export or straight from a `SYSTEM` hive's
+`Services` key. Parser flags are observations, never verdicts:
+
+```console
+$ huntforge events --case CASE-003 --event-id service
+[8] 2026-09-15T08:30:00Z services:service host=- user=LocalSystem process=badsvc.exe(-)
+      command_line: C:\Temp\badsvc.exe -k netsvcs
+      registry_key: ControlSet001\Services\BadSvc
+      flags: auto-start, image-in-temp-dir (parser observation)
+...
+[4] 2026-10-03T04:16:38Z services:service host=- user=LocalSystem process=unquoted.exe(-)
+      command_line: C:\Program Files\Vendor\unquoted.exe --run
+      flags: unquoted-service-path (parser observation)
+```
+
+And the scheduled task — triggers, action, and the account it runs as:
+
+```console
+$ huntforge events --case CASE-003 --event-id task
+1 event(s) match
+[10] 2026-09-28T14:30:00Z tasks:task host=- user=S-1-5-18 process=evil.exe(-)
+      command_line: C:\Temp\evil.exe --silent --persist
+      flags: runs-as-system, action-in-temp-dir (parser observation)
+```
+
+`MALWARE.EXE` ran 14 times, a `Run` key points at `C:\Temp\evil.exe`,
+and a SYSTEM task executes the same binary at logon — three
+independent artifacts telling one story. What you conclude from that
+is your call: HuntForge records observations, v0.5 will add
+explainable detections.
+
+![HuntForge v0.3 persistence artifacts](images/03-persistence.png)
+
+### Honest limitations (v0.3)
+
+- Prefetch: versions 23/26/30 only; compressed MAM prefetch and
+  version 31 are rejected with guidance. Trace-chain arrays are not
+  parsed.
+- Registry: no transaction-log replay, no deleted-cell recovery, no
+  multi-cell (`db`) large values, no security descriptors.
+- Parsers are validated against synthetic fixtures built to the
+  published layouts; validation against live forensic copies is
+  pending.
+
 ## Scenario (v0.2): from log export to process lineage
 
 You have a finance workstation (`WS-FIN-014`) and a hunch that
@@ -118,8 +238,8 @@ parse warnings), `2` usage/operational error.
 
 ## What's next
 
-v0.3 adds prefetch/registry/task parsers; v0.4 builds timeline and
-process lineage on top of the events ingested here.
+v0.4 builds the unified timeline and process lineage on top of the
+events ingested here.
 
 ---
 

@@ -3,6 +3,52 @@
 All notable changes to HuntForge are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-10-03
+
+### Added
+- Persistence-artifact parsers (`huntforge.parsers.prefetch`,
+  `huntforge.parsers.registry`, `huntforge.parsers.persistence`;
+  stdlib-only, fully offline, registered in the plugin registry as
+  `parsers` v0.3.0):
+  - Prefetch (`.pf`, format versions 23/26/30): 84-byte header
+    (`SCCA` signature, UTF-16LE executable name, prefetch hash),
+    run count, last-run FILETIMEs, referenced filenames via the
+    file-metrics array, volume device path/serial/creation time.
+    One `prefetch:prefetch` execution-evidence event per file.
+    Compressed (MAM) prefetch and version 31 are rejected with
+    clean guidance.
+  - Offline registry hives (`regf`): pure-Python NK/VK cell parser
+    with lf/lh/li/ri subkey lists; decodes `REG_SZ`,
+    `REG_EXPAND_SZ`, `REG_BINARY`, `REG_DWORD`,
+    `REG_DWORD_BIG_ENDIAN`, `REG_MULTI_SZ`, `REG_QWORD`
+    (anything else → hex). New `huntforge registry <hive-file>
+    <key-path> [--json]` command for targeted forensic reads
+    (no case required, no audit record).
+  - Registry persistence scan on ingest: `Run`/`RunOnce` values →
+    `registry:run-key` events (timestamp = key last-write time);
+    `Services` key → `services:service` events (image path, start
+    type, service account).
+  - Scheduled tasks (`schtasks /query /xml`): triggers, Exec
+    actions, principals, author → `tasks:task` events; new parser
+    observations `runs-as-system`, `action-in-temp-dir`.
+  - Services JSON exports (documented schema) → `services:service`
+    events; new observations `auto-start`, `image-in-temp-dir`,
+    `unquoted-service-path`.
+- `ingest` source auto-detection extended: `SCCA` magic → `prefetch`,
+  `regf` magic → `registry`, `<Task>` root → `tasks`,
+  `"image_path"` JSON → `services`
+  (`--source prefetch|registry|tasks|services` overrides).
+- All parser flags remain observations, never verdicts (v0.5).
+- Tests: `tests/test_persistence.py` (62 tests); 8 new synthetic
+  fixtures under `tests/fixtures/` (programmatically built
+  Prefetch/hive binaries, task XML, services JSON, malformed
+  inputs). Total: 199 tests, 86.7% coverage.
+
+### Fixed
+- Task Scheduler XML detection skips the XML declaration and leading
+  comments before matching the `<Task>` root (Windows Event XML also
+  contains `<Task>` inside `<System>` — the root tag decides).
+
 ## [0.2.0] - 2026-10-03
 
 ### Added
