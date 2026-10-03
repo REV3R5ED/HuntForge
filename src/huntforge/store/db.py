@@ -98,7 +98,9 @@ CREATE TABLE IF NOT EXISTS findings (
     confidence INTEGER NOT NULL,
     created_at TEXT NOT NULL,
     evidence_json TEXT NOT NULL DEFAULT '[]',
-    explanation_json TEXT NOT NULL DEFAULT '{}'
+    explanation_json TEXT NOT NULL DEFAULT '{}',
+    mitre_json TEXT NOT NULL DEFAULT '[]',
+    provenance TEXT NOT NULL DEFAULT 'huntforge.detections'
 );
 CREATE INDEX IF NOT EXISTS findings_rule ON findings(rule_id);
 CREATE INDEX IF NOT EXISTS findings_severity ON findings(severity);
@@ -155,6 +157,21 @@ class CaseDB:
         if "flags" not in columns:
             self._conn.execute(
                 "ALTER TABLE events ADD COLUMN flags TEXT NOT NULL DEFAULT '[]'"
+            )
+            self._conn.commit()
+        # v0.6: findings gained ATT&CK technique IDs and a provenance marker.
+        finding_columns = {
+            r["name"] for r in self._conn.execute("PRAGMA table_info(findings)")
+        }
+        if "mitre_json" not in finding_columns:
+            self._conn.execute(
+                "ALTER TABLE findings ADD COLUMN mitre_json TEXT NOT NULL DEFAULT '[]'"
+            )
+            self._conn.commit()
+        if "provenance" not in finding_columns:
+            self._conn.execute(
+                "ALTER TABLE findings ADD COLUMN provenance TEXT NOT NULL "
+                "DEFAULT 'huntforge.detections'"
             )
             self._conn.commit()
 
@@ -408,8 +425,9 @@ class CaseDB:
         self._conn.execute(
             """INSERT INTO findings
                (finding_uid, rule_id, rule_version, severity, title,
-                confidence, created_at, evidence_json, explanation_json)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                confidence, created_at, evidence_json, explanation_json,
+                mitre_json, provenance)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 uid,
                 str(finding.get("rule_id", "")),
@@ -420,6 +438,8 @@ class CaseDB:
                 utc_now_iso(),
                 json.dumps(finding.get("evidence", [])),
                 json.dumps(explanation),
+                json.dumps(finding.get("mitre", [])),
+                str(finding.get("provenance", "huntforge.detections")),
             ),
         )
         self._conn.commit()
@@ -453,6 +473,8 @@ class CaseDB:
                 "created_at": r["created_at"],
                 "evidence": json.loads(r["evidence_json"] or "[]"),
                 "explanation": json.loads(r["explanation_json"] or "{}"),
+                "mitre": json.loads(r["mitre_json"] or "[]"),
+                "provenance": r["provenance"] or "huntforge.detections",
             }
             for r in rows
         ]
