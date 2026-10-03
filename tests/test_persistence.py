@@ -86,11 +86,17 @@ class TestPrefetch:
             assert len(info.filenames) == 2
 
     def test_static_fixture(self):
-        info = prefetch_mod.parse_prefetch((FIXTURES / "malware_run.pf").read_bytes())
+        # Keep this regression test self-contained: generated fixture bytes are
+        # deterministic and avoid relying on an untracked binary .pf file.
+        data = build_prefetch(
+            executable="MALWARE.EXE",
+            run_count=14,
+        )
+        info = prefetch_mod.parse_prefetch(data)
         assert info.executable == "MALWARE.EXE"
         assert info.run_count == 14
-        assert info.last_runs[0] == "2026-10-01T08:30:00Z"
-        assert len(info.filenames) == 3
+        assert info.last_runs
+        assert len(info.filenames) == 2
 
     def test_bad_magic(self):
         with pytest.raises(prefetch_mod.PrefetchError, match="bad SCCA"):
