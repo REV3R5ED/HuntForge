@@ -1,16 +1,18 @@
 """HuntForge CLI: ``huntforge case ...`` / ``huntforge ingest ...`` /
 ``huntforge events ...`` / ``huntforge registry ...`` /
 ``huntforge timeline ...`` / ``huntforge lineage ...`` /
-``huntforge entities ...``.
+``huntforge entities ...`` / ``huntforge detect ...`` /
+``huntforge rules ...``.
 
 Every command returns a shared result envelope, renders human-readable
 text by default (``--json`` for automation), uses structured exit
-codes (0 ok / 2 error; 1 is reserved for future detection findings),
-and writes an audit record to the case when one is involved.
-Diagnostics go to stderr; stdout carries only the requested output.
+codes (0 ok / 1 findings / 2 error), and writes an audit record to the
+case when one is involved. Diagnostics go to stderr; stdout carries
+only the requested output.
 
-v0.4 adds the observation tools: unified cross-source timeline,
-process lineage trees, and entity resolution (no verdicts — v0.5).
+v0.5 adds explainable detections: ``detect`` runs the rule catalog
+over a case's events and every finding cites its evidence; ``rules``
+lists the catalog. No verdicts are final — the analyst decides.
 """
 
 from __future__ import annotations
@@ -31,6 +33,13 @@ from huntforge.core.results import (
     EXIT_OK,
     Result,
     exit_code_for,
+)
+from huntforge.detections import (
+    DetectionEngine,
+    Severity,
+    list_rules,
+    select_rules,
+    summarize,
 )
 from huntforge.events.query import EventQuery
 from huntforge.ingest.service import ingest_path, load_fixture
@@ -56,6 +65,8 @@ plugins_mod.register(
             "timeline",
             "lineage",
             "entities",
+            "detect",
+            "rules",
         ],
     )
 )
@@ -228,6 +239,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="Only show this entity type",
     )
 
+    detect_p = sub.add_parser(
+        "detect", help="Run explainable detection rules over a case"
+    )
+    detect_p.add_argument("--case", required=True, help="Case identifier")
+    detect_p.add_argument(
+        "--rule",
+        action="append",
+        default=None,
+        dest="rule_ids",
+        help="Run only this rule (repeatable; default: whole catalog)",
+    )
+    detect_p.add_argument(
+        "--severity",
+        default=None,
+        help=(
+            "Severity filter, e.g. 'high' (exactly high) or 'high+' (high and above)"
+        ),
+    )
+    detect_p.add_argument(
+        "--explain",
+        action="store_true",
+        help="Show full reasoning: why, evidence, confidence, observed vs inferred",
+    )
+
+    rules_p = sub.add_parser("rules", help="Detection rule catalog")
+    rules_sub = rules_p.add_subparsers(dest="rules_command", required=True)
+    rules_sub.add_parser("list", help="List all detection rules")
+
     return parser
 
 
@@ -243,6 +282,7 @@ def _audit(
         fixture = result.data.get("fixture") or {}
         result_count = (
             len(result.events)
+            + len(result.findings)
             + len(result.data.get("evidence", []) or [])
             + int(result.data.get("registered", 0) or 0)
             + int(fixture.get("loaded", 0) or 0)
@@ -542,6 +582,125 @@ def cmd_entities(
     return result, args.case
 
 
+def cmd_detect(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | None]:
+    result = Result(command="detect")
+    service = CaseService(state_dir)
+    try:
+        db = service.open_db(args.case)
+    except CaseError as exc:
+        result.fail(str(exc))
+        return result, None
+    try:
+        try:
+            rules = select_rules(args.rule_ids)
+        except ValueError as exc:
+            result.fail(str(exc))
+            return result, args.case
+        min_severity: Severity | None = None
+        exact: Severity | None = None
+        if args.severity:
+            try:
+                level, at_least = Severity.parse(args.severity)
+            except ValueError as exc:
+                result.fail(str(exc))
+                return result, args.case
+            if at_least:
+                min_severity = level
+            else:
+                min_severity = level
+                exact = level
+        engine = DetectionEngine(db.all_events())
+        applicable = engine.applicable(rules)
+        findings = engine.run(rules=rules, min_severity=min_severity)
+        if exact is not None:
+            findings = [f for f in findings if f.severity == exact]
+        # Persist findings to the case; the DB assigns case-scoped UIDs.
+        stored: list[dict[str, Any]] = []
+        for finding in findings:
+            data = finding.to_dict()
+            data["finding_uid"] = db.add_finding(data)
+            stored.append(data)
+        result.findings = stored
+        stats = summarize(findings)
+        result.data = {
+            "count": len(findings),
+            "by_severity": stats["by_severity"],
+            "rules_run": [r.id for r in rules],
+            "rules_without_data": sorted(
+                rid for rid, ok in applicable.items() if not ok
+            ),
+            "severity_filter": args.severity,
+        }
+        if findings:
+            bits = ", ".join(
+                f"{n} {sev}" for sev, n in sorted(stats["by_severity"].items())
+            )
+            result.summary = f"{len(findings)} finding(s): {bits}"
+            # Findings are the product, not an error: exit 1 (EXIT_FINDINGS).
+            result.status = "warning"
+        else:
+            result.summary = "no findings"
+            if applicable and not all(applicable.values()):
+                missing = ", ".join(
+                    rid for rid, ok in sorted(applicable.items()) if not ok
+                )
+                result.summary += f" (no telemetry for: {missing})"
+    finally:
+        db.close()
+    return result, args.case
+
+
+def cmd_rules(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | None]:
+    del state_dir  # catalog needs no case
+    result = Result(command="rules list")
+    catalog = [rule.to_dict() for rule in list_rules()]
+    result.data = {"rules": catalog, "count": len(catalog)}
+    result.summary = f"{len(catalog)} rule(s)"
+    return result, None
+
+
+def _human_detect(
+    data: dict[str, Any], findings: list[dict[str, Any]], explain: bool
+) -> None:
+    if not findings:
+        print("  no findings")
+        missing = data.get("rules_without_data") or []
+        if missing:
+            print(f"  rules without telemetry: {', '.join(missing)}")
+        return
+    for finding in findings:
+        sev = str(finding.get("severity", "?")).upper()
+        print(
+            f"  [{finding.get('finding_uid')}] {sev} "
+            f"{finding.get('rule_id')} — {finding.get('title')} "
+            f"(confidence {finding.get('confidence')})"
+        )
+        for reason in finding.get("why") or []:
+            print(f"    why: {reason}")
+        for ref in finding.get("evidence") or []:
+            print(
+                f"    evidence: event #{ref.get('event_id')} "
+                f"({ref.get('source')}:{ref.get('source_event_id')}) — "
+                f"{ref.get('observation')}"
+            )
+        if explain:
+            print(f"    what: {finding.get('what')}")
+            print(f"    confidence: {finding.get('confidence_reason')}")
+            for fact in finding.get("observed") or []:
+                print(f"    observed: {fact}")
+            for guess in finding.get("inferred") or []:
+                print(f"    inferred (analyst decides): {guess}")
+    missing = data.get("rules_without_data") or []
+    if missing:
+        print(f"  rules without telemetry: {', '.join(missing)}")
+
+
+def _human_rules(data: dict[str, Any]) -> None:
+    for rule in data.get("rules") or []:
+        print(f"  {rule['id']} [{rule['severity']}] — {rule['title']}")
+        print(f"    {rule['description']}")
+
+
 def _human_registry(data: dict[str, Any]) -> None:
     print(f"  path: {data.get('path')}")
     print(f"  last_write: {data.get('last_write') or '-'}")
@@ -618,7 +777,9 @@ def _human_entities(data: dict[str, Any]) -> None:
         )
 
 
-def render(result: Result, as_json: bool) -> None:
+def render(
+    result: Result, as_json: bool, args: argparse.Namespace | None = None
+) -> None:
     if as_json:
         _print_json(result)
         return
@@ -637,6 +798,13 @@ def render(result: Result, as_json: bool) -> None:
         return
     if result.command == "entities" and result.data:
         _human_entities(result.data)
+        return
+    if result.command == "detect" and result.data:
+        explain = bool(args is not None and getattr(args, "explain", False))
+        _human_detect(result.data, result.findings, explain)
+        return
+    if result.command == "rules list" and result.data:
+        _human_rules(result.data)
         return
     if result.data:
         for key, value in result.data.items():
@@ -694,6 +862,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "timeline": cmd_timeline,
         "lineage": cmd_lineage,
         "entities": cmd_entities,
+        "detect": cmd_detect,
+        "rules": cmd_rules,
     }
     handler = handlers.get(args.command)
     if handler is None:  # pragma: no cover - argparse guards this
@@ -702,7 +872,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     result, audit_case = handler(args, state_dir)
     if audit_case:
         _audit(audit_case, state_dir, args.command, args, result)
-    render(result, args.json)
+    render(result, args.json, args)
     return exit_code_for(result)
 
 
