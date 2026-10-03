@@ -1,16 +1,14 @@
-"""HuntForge evidence ingestion (v0.1 stub with real provenance).
+"""HuntForge evidence ingestion (v0.2: evidence registry + telemetry parsers).
 
-v0.1 ingest registers evidence files — hashing every file (SHA-256 +
+v0.2 ingest registers evidence files — hashing every file (SHA-256 +
 MD5) and recording size, ingest time and parser name in the case's
-evidence table. Source files are never modified. Full artifact parsers
-(EVTX, Sysmon, PowerShell, …) arrive in v0.2+; until then, normalized
-events can be loaded from JSONL fixtures with ``--fixture``, which is
-also how tests and early adopters populate the event store.
-
-Fixture JSONL format: one JSON object per line, each matching the
-:class:`NormalizedEvent` schema. ``provenance`` may be omitted per
-line — the loader fills it with the fixture file's own provenance
-(``parser_name="fixture-loader"``).
+evidence table — and then parses recognized telemetry (Sysmon,
+Security log, PowerShell, exported Windows Event XML/JSON) into
+normalized events with full provenance. Source files are never
+modified. Binary ``.evtx`` files are detected by magic bytes and
+reported as warnings (export to XML with ``wevtutil`` first); they are
+still registered as evidence. Normalized events can also be loaded
+from JSONL fixtures with ``--fixture``.
 """
 
 from __future__ import annotations
@@ -22,6 +20,13 @@ from typing import Any
 
 from huntforge.core.logging import utc_now_iso
 from huntforge.models.events import EventValidationError, NormalizedEvent, Provenance
+from huntforge.parsers import (
+    SOURCE_KINDS,
+    detect_source,
+    parse_file,
+)
+from huntforge.parsers.common import MAX_WARNINGS_PER_FILE
+from huntforge.parsers.evtx import WEVTUTIL_GUIDANCE, EvtxBinaryError, is_evtx_binary
 from huntforge.store.db import CaseDB, EvidenceRecord
 
 FIXTURE_PARSER = "fixture-loader"
@@ -51,12 +56,31 @@ def iter_evidence_files(path: Path, recursive: bool = True) -> list[Path]:
     return sorted(p for p in path.iterdir() if p.is_file())
 
 
-def ingest_path(db: CaseDB, path: Path, recursive: bool = True) -> dict[str, Any]:
-    """Register evidence files from *path*; returns a summary dict."""
+def ingest_path(
+    db: CaseDB,
+    path: Path,
+    recursive: bool = True,
+    parse: bool = True,
+    source: str | None = None,
+) -> dict[str, Any]:
+    """Register evidence files from *path* and parse recognized telemetry.
+
+    *parse* enables the v0.2 parsers (disable with ``--no-parse``);
+    *source* forces one source kind for every file (``--source``),
+    otherwise each file is auto-detected by content. Unrecognized files
+    are registered but not parsed; binary EVTX files produce a warning
+    with ``wevtutil`` export guidance. Parsing never aborts ingest —
+    per-file failures become warnings.
+    """
+    if source is not None and source not in SOURCE_KINDS:
+        raise ValueError(f"unknown source {source!r}; expected one of {SOURCE_KINDS}")
     files = iter_evidence_files(path, recursive=recursive)
     registered = 0
     skipped = 0
     total_bytes = 0
+    parsed_events = 0
+    parsed_by_source: dict[str, int] = {}
+    parse_warnings: list[str] = []
     records: list[dict[str, Any]] = []
     for file_path in files:
         digest_sha256, digest_md5 = hash_file(file_path)
@@ -78,6 +102,17 @@ def ingest_path(db: CaseDB, path: Path, recursive: bool = True) -> dict[str, Any
                 "sha256": record.sha256,
             }
         )
+        if parse:
+            _parse_evidence_file(
+                db,
+                file_path,
+                record,
+                digest_sha256,
+                source,
+                parsed_by_source,
+                parse_warnings,
+            )
+            parsed_events = sum(parsed_by_source.values())
     return {
         "path": str(path),
         "files_found": len(files),
@@ -85,7 +120,49 @@ def ingest_path(db: CaseDB, path: Path, recursive: bool = True) -> dict[str, Any
         "skipped": skipped,
         "total_bytes": total_bytes,
         "evidence": records,
+        "parsed_events": parsed_events,
+        "parsed_by_source": parsed_by_source,
+        "parse_warnings": parse_warnings[:MAX_WARNINGS_PER_FILE],
     }
+
+
+def _parse_evidence_file(
+    db: CaseDB,
+    file_path: Path,
+    record: EvidenceRecord,
+    source_sha256: str,
+    source: str | None,
+    parsed_by_source: dict[str, int],
+    parse_warnings: list[str],
+) -> None:
+    """Parse one evidence file into the event store (best effort)."""
+    ingest_time = utc_now_iso()
+    try:
+        kind = source or detect_source(file_path)
+    except OSError as exc:
+        parse_warnings.append(f"{file_path.name}: cannot read file ({exc})")
+        return
+    if kind is None:
+        return  # not recognized telemetry; registered as evidence only
+    if kind == "evtx-binary" or is_evtx_binary(file_path):
+        parse_warnings.append(f"{file_path.name}: {WEVTUTIL_GUIDANCE}")
+        return
+    try:
+        result = parse_file(
+            file_path, kind, source_sha256=source_sha256, ingest_time=ingest_time
+        )
+    except EvtxBinaryError as exc:
+        parse_warnings.append(str(exc))
+        return
+    except Exception as exc:  # one bad file never aborts ingest
+        parse_warnings.append(f"{file_path.name}: parser failed ({exc})")
+        return
+    for event in result.events:
+        db.add_event(event, evidence_id=record.id)
+    parsed_by_source[result.source_kind] = parsed_by_source.get(
+        result.source_kind, 0
+    ) + len(result.events)
+    parse_warnings.extend(result.warnings)
 
 
 def load_fixture(db: CaseDB, fixture_path: Path) -> dict[str, Any]:

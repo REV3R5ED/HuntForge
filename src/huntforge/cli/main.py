@@ -71,6 +71,9 @@ def _human_events(events: list[dict[str, Any]]) -> None:
             value = event.get(field)
             if value:
                 print(f"      {field}: {value}")
+        flags = event.get("flags") or []
+        if flags:
+            print(f"      flags: {', '.join(flags)} (parser observation)")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -114,6 +117,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-recursive",
         action="store_true",
         help="Do not recurse into subdirectories",
+    )
+    ingest_p.add_argument(
+        "--source",
+        choices=["sysmon", "security", "powershell", "evtx-xml"],
+        default=None,
+        help=(
+            "Force one telemetry source kind for every file "
+            "(default: auto-detect by content)"
+        ),
+    )
+    ingest_p.add_argument(
+        "--no-parse",
+        action="store_true",
+        help="Register evidence only; skip telemetry parsing",
     )
 
     events_p = sub.add_parser("events", help="Query normalized events")
@@ -162,6 +179,7 @@ def _audit(
             + len(result.data.get("evidence", []) or [])
             + int(result.data.get("registered", 0) or 0)
             + int(fixture.get("loaded", 0) or 0)
+            + int(result.data.get("parsed_events", 0) or 0)
         )
         db = CaseDB(state_dir, db_case)
         try:
@@ -209,7 +227,13 @@ def cmd_ingest(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str |
         return result, None
     try:
         path = Path(args.path).expanduser()
-        summary = ingest_path(db, path, recursive=not args.no_recursive)
+        summary = ingest_path(
+            db,
+            path,
+            recursive=not args.no_recursive,
+            parse=not args.no_parse,
+            source=args.source,
+        )
         result.data.update(summary)
         fixture_summary: dict[str, Any] = {}
         if args.fixture:
@@ -221,10 +245,24 @@ def cmd_ingest(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str |
                     f"{fixture_summary['skipped']}: see fixture.errors"
                 )
         if result.status != "error":
+            parsed = summary.get("parsed_events", 0)
+            by_source = summary.get("parsed_by_source", {})
+            source_bits = (
+                ", ".join(f"{k}: {v}" for k, v in sorted(by_source.items()))
+                if by_source
+                else "none"
+            )
+            warnings = summary.get("parse_warnings", [])
             result.summary = (
                 f"registered {summary['registered']} evidence file(s), "
-                f"loaded {fixture_summary.get('loaded', 0)} event(s)"
+                f"parsed {parsed} event(s) [{source_bits}]"
             )
+            if fixture_summary.get("loaded"):
+                result.summary += (
+                    f", loaded {fixture_summary['loaded']} fixture event(s)"
+                )
+            if warnings:
+                result.summary += f", {len(warnings)} warning(s)"
     except FileNotFoundError as exc:
         result.fail(str(exc))
     except OSError as exc:
@@ -312,6 +350,13 @@ def render(result: Result, as_json: bool) -> None:
     if result.data.get("evidence"):
         for item in result.data["evidence"]:
             print(f"  #{item['id']} {item['filename']} sha256={item['sha256'][:16]}…")
+    warnings = result.data.get("parse_warnings") or []
+    if warnings:
+        print(f"  warnings ({len(warnings)}):")
+        for warning in warnings[:5]:
+            print(f"    - {warning}")
+        if len(warnings) > 5:
+            print(f"    … and {len(warnings) - 5} more (see --json)")
     if result.events:
         _human_events(result.events)
 

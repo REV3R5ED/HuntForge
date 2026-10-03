@@ -14,7 +14,7 @@ default, every detection is explainable with preserved evidence, humans
 make the final judgment, and observed facts are always distinguished
 from inference.
 
-## v0.1 — what works today
+## v0.2 — what works today
 
 - **Core CLI** (`huntforge`): `case create/show/list`, `ingest`,
   `events`, `audit`, `--version`. JSON output on every command
@@ -22,17 +22,25 @@ from inference.
 - **Normalized event model** (the v1.0-stable core): UTC-normalized
   timestamps with originals preserved, host/user, source + event id,
   process and parent (name/pid), command line, network tuple,
-  file path, registry key, hashes, raw reference — and **mandatory
-  provenance** (source file, record index, parser name/version,
-  ingest time, source SHA-256) on every event.
+  file path, registry key, hashes, parser-observation **flags**, raw
+  reference — and **mandatory provenance** (source file, record index,
+  parser name/version, ingest time, source SHA-256) on every event.
+- **Telemetry parsers** (stdlib-only, fully offline): Sysmon
+  (EventIDs 1/3/7/11/12/13/14), Security log (4624/4625/4634/4647
+  logon/logoff, 4688 process creation with hex-PID decoding),
+  PowerShell operational log (4103/4104 script-block capture,
+  4105/4106), and generic exported Windows Event XML/JSON.
+  `-EncodedCommand`/`-enc` is recorded as `flags: ["encoded-command"]`
+  — an observation, never a verdict.
+- **Evidence ingest**: registers files with SHA-256 + MD5 hashing
+  (sources never modified; duplicates deduped by hash), auto-detects
+  the source kind by content (`--source` overrides, `--no-parse`
+  registers only), and reports `parsed_events`, `parsed_by_source`
+  and `parse_warnings` — malformed records warn, never crash.
 - **Per-case SQLite event store** (`~/.huntforge/cases/<CASE-ID>/store.db`,
   override with `HUNTFORGE_STATE_DIR`): cases, evidence registry,
   events with indexes on timestamp/host/user/event-id/process, and an
-  audit table.
-- **Evidence ingest**: registers files with SHA-256 + MD5 hashing
-  (sources never modified; duplicates deduped by hash). Full EVTX /
-  Sysmon / PowerShell parsers land in v0.2 — until then, normalized
-  events load via `--fixture` JSONL (also used by tests).
+  audit table. v0.1 databases gain the `flags` column automatically.
 - **Audit trail**: every CLI invocation touching a case is logged
   (command, args, timestamp, result count).
 
@@ -54,7 +62,7 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 ## Roadmap
 
 - [x] **v0.1** — Core CLI, normalized event model, JSON output, provenance
-- [ ] **v0.2** — Windows Event/Sysmon/PowerShell ingestion
+- [x] **v0.2** — Windows Event/Sysmon/PowerShell ingestion
 - [ ] **v0.3** — Prefetch, Amcache/Shimcache, registry persistence, services, tasks
 - [ ] **v0.4** — Unified timeline, process lineage, entity views, gap reporting
 - [ ] **v0.5** — Explainable detection rules (never label malicious from a heuristic alone)
@@ -64,13 +72,16 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - [ ] **v0.9** — Analyst UI + ecosystem integrations (SentinelKit, LogLens, AegisForge)
 - [ ] **v1.0** — Stable schemas, release docs, benchmark/demo corpus, hardened plugin API
 
-## Limitations (v0.1)
+## Limitations (v0.2)
 
-- No artifact parsers yet: EVTX, Sysmon, PowerShell, prefetch,
-  registry and friends arrive in v0.2–v0.3. Ingest registers and
-  hashes evidence; event population uses `--fixture` JSONL.
-- No timeline, detections, ATT&CK mapping, correlation, or reports —
-  those are v0.4+.
+- **Binary `.evtx` is not parsed**: the adapter detects it by magic
+  bytes and prints the exact `wevtutil qe … /f:xml` command to export
+  it first. Exported Event XML and JSON are fully parsed.
+- No prefetch/registry/task parsers yet (v0.3); no timeline,
+  detections, ATT&CK mapping, correlation, or reports (v0.4+).
+- Parser flags (e.g. `encoded-command`) are observations only — v0.5
+  detections will act on them; nothing is ever labeled malicious by
+  a parser.
 - Single-user local tool: the SQLite store has no access control;
   keep case directories on trusted storage.
 - Python 3.10–3.13, stdlib only (no third-party runtime dependencies).

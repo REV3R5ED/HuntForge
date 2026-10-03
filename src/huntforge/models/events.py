@@ -13,6 +13,9 @@ Design notes for future phases:
   ints, some sources use strings).
 - ``hashes`` maps algorithm name (lowercase, e.g. ``"sha256"``) to
   hex digest.
+- ``flags`` is a list of parser observations (e.g. ``"encoded-command"``).
+  Flags are **observations, never verdicts** — v0.5 detections may act
+  on them, but no parser ever labels activity malicious.
 - ``raw`` is a short reference/excerpt, never the full native record;
   full records live in the evidence files registered at ingest time.
 """
@@ -105,6 +108,7 @@ class NormalizedEvent:
     file_path: str | None = None
     registry_key: str | None = None
     hashes: dict[str, str] = field(default_factory=dict)
+    flags: list[str] = field(default_factory=list)
     raw: str | None = None
 
     def __post_init__(self) -> None:
@@ -139,6 +143,13 @@ class NormalizedEvent:
                 "hashes must be a dict of algorithm -> hex digest"
             )
         self.hashes = {str(k).lower(): str(v) for k, v in self.hashes.items()}
+        if self.flags is None:
+            self.flags = []
+        if not isinstance(self.flags, (list, tuple)) or not all(
+            isinstance(f, str) for f in self.flags
+        ):
+            raise EventValidationError("flags must be a list of strings")
+        self.flags = [str(f) for f in self.flags]
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
