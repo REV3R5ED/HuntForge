@@ -272,15 +272,22 @@ def _sz(text: str) -> bytes:
     return text.encode("utf-16-le") + b"\x00\x00"
 
 
-def build_hive(*, timestamp: datetime | None = None) -> bytes:
+def build_hive(
+    *,
+    timestamp: datetime | None = None,
+    run_values: list[tuple[str, str]] | None = None,
+) -> bytes:
     """Build a synthetic hive with Run/RunOnce keys and a Services tree.
 
     Layout (all under a ``ROOT`` key)::
 
-        Software\\Microsoft\\Windows\\CurrentVersion\\Run      (2 REG_SZ)
+        Software\\Microsoft\\Windows\\CurrentVersion\\Run      (REG_SZ values)
         Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce  (1 REG_SZ)
         ControlSet001\\Services\\BadSvc   (ImagePath/Start/Type/ObjectName/DisplayName)
         ControlSet001\\Services\\GoodSvc  (ImagePath/Start/ObjectName)
+
+    ``run_values`` overrides the default Run key entries as
+    ``(name, command)`` pairs.
     """
     if timestamp is None:
         timestamp = datetime.now(timezone.utc) - timedelta(days=1)
@@ -292,14 +299,14 @@ def build_hive(*, timestamp: datetime | None = None) -> bytes:
             name, timestamp=timestamp, subkeys=list(children.values()), values=values
         )
 
-    run_values = [
-        b.vk(
-            "Updater", 1, _sz("C:\\Users\\test\\AppData\\Roaming\\updater.exe --silent")
-        ),
-        b.vk("BadThing", 1, _sz("C:\\Temp\\evil.exe")),
-    ]
+    if run_values is None:
+        run_values = [
+            ("Updater", "C:\\Users\\test\\AppData\\Roaming\\updater.exe --silent"),
+            ("BadThing", "C:\\Temp\\evil.exe"),
+        ]
+    run_value_cells = [b.vk(name, 1, _sz(command)) for name, command in run_values]
     runonce_values = [b.vk("Once", 1, _sz("C:\\Windows\\Temp\\once.exe /q"))]
-    run = key("Run", {}, run_values)
+    run = key("Run", {}, run_value_cells)
     runonce = key("RunOnce", {}, runonce_values)
     current_version = key("CurrentVersion", {"Run": run, "RunOnce": runonce}, [])
     windows = key("Windows", {"CurrentVersion": current_version}, [])

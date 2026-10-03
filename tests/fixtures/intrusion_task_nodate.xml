@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic task with no triggers and no registration date: its
+     event carries no original timestamp (untimed in the timeline). -->
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>FIN-014\m.alvarez</Author>
+    <URI>\Helper</URI>
+  </RegistrationInfo>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Windows\System32\notepad.exe</Command>
+    </Exec>
+  </Actions>
+</Task>

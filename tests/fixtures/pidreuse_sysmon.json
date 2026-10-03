@@ -1,0 +1,53 @@
+[
+ {
+  "Channel": "Microsoft-Windows-Sysmon/Operational",
+  "Computer": "WS-FIN-014",
+  "EventData": {
+   "CommandLine": "powershell.exe -enc aQBmAA==",
+   "Image": "C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe",
+   "ParentImage": "C:\\\\Program Files\\\\Microsoft Office\\\\root\\\\Office16\\\\WINWORD.EXE",
+   "ParentProcessId": "3131",
+   "ProcessId": "7422",
+   "User": "FIN-014\\m.alvarez",
+   "UtcTime": "2026-10-02 09:12:41.123"
+  },
+  "EventID": 1,
+  "EventRecordID": 301,
+  "Provider": "Microsoft-Windows-Sysmon",
+  "TimeCreated": "2026-10-02T09:12:41.1230000Z"
+ },
+ {
+  "Channel": "Microsoft-Windows-Sysmon/Operational",
+  "Computer": "WS-FIN-014",
+  "EventData": {
+   "CommandLine": "\"C:\\\\Windows\\\\System32\\notepad.exe\"",
+   "Image": "C:\\\\Windows\\\\System32\\notepad.exe",
+   "ParentImage": "C:\\\\Windows\\\\System32\\explorer.exe",
+   "ParentProcessId": "2048",
+   "ProcessId": "7422",
+   "User": "FIN-014\\m.alvarez",
+   "UtcTime": "2026-10-02 12:00:05.000"
+  },
+  "EventID": 1,
+  "EventRecordID": 302,
+  "Provider": "Microsoft-Windows-Sysmon",
+  "TimeCreated": "2026-10-02T12:00:05.0000000Z"
+ },
+ {
+  "Channel": "Microsoft-Windows-Sysmon/Operational",
+  "Computer": "WS-FIN-014",
+  "EventData": {
+   "CommandLine": "\"C:\\\\Windows\\\\System32\\calc.exe\"",
+   "Image": "C:\\\\Windows\\\\System32\\calc.exe",
+   "ParentImage": "C:\\\\Windows\\\\System32\\notepad.exe",
+   "ParentProcessId": "7422",
+   "ProcessId": "9001",
+   "User": "FIN-014\\m.alvarez",
+   "UtcTime": "2026-10-02 12:01:17.000"
+  },
+  "EventID": 1,
+  "EventRecordID": 303,
+  "Provider": "Microsoft-Windows-Sysmon",
+  "TimeCreated": "2026-10-02T12:01:17.0000000Z"
+ }
+]

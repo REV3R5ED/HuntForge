@@ -321,6 +321,15 @@ class CaseDB:
         ).fetchall()
         return [self._row_to_event(r) for r in rows]
 
+    def all_events(self) -> list[dict[str, Any]]:
+        """Every event in the case, ordered deterministically by
+        (timestamp, row id). Unfiltered — callers (timeline, lineage,
+        entities) apply their own views."""
+        rows = self._conn.execute(
+            "SELECT * FROM events ORDER BY timestamp ASC, id ASC"
+        ).fetchall()
+        return [self._row_to_event(r) for r in rows]
+
     @staticmethod
     def _row_to_event(row: sqlite3.Row) -> dict[str, Any]:
         try:
