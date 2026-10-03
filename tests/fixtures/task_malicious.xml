@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic Task Scheduler export (schtasks /query /xml). Fictional. -->
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Date>2026-09-28T14:22:10</Date>
+    <Author>WORKSTATION\analyst</Author>
+    <URI>\Microsoft\Windows\UpdateOrchestrator\Updater</URI>
+    <Description>Routine updater task</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <StartBoundary>2026-09-28T14:30:00</StartBoundary>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+    <TimeTrigger>
+      <StartBoundary>2026-09-29T03:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+    </TimeTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-18</UserId>
+      <LogonType>ServiceAccount</LogonType>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Temp\evil.exe</Command>
+      <Arguments>--silent --persist</Arguments>
+    </Exec>
+  </Actions>
+</Task>

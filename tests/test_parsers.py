@@ -66,8 +66,8 @@ def by_event_id(events: list[NormalizedEvent]) -> dict[str, list[NormalizedEvent
 
 
 class TestPackaging:
-    def test_version_is_0_2(self) -> None:
-        assert __version__ == "0.2.0"
+    def test_version_is_0_3(self) -> None:
+        assert __version__ == "0.3.0"
 
     def test_source_kinds(self) -> None:
         assert set(SOURCE_KINDS) == {
@@ -75,6 +75,10 @@ class TestPackaging:
             "security",
             "powershell",
             "evtx-xml",
+            "prefetch",
+            "registry",
+            "tasks",
+            "services",
         }
 
     def test_registration_idempotent(self) -> None:
