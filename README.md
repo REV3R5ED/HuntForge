@@ -14,12 +14,12 @@ default, every detection is explainable with preserved evidence, humans
 make the final judgment, and observed facts are always distinguished
 from inference.
 
-## v0.4 — what works today
+## v0.5 — what works today
 
 - **Core CLI** (`huntforge`): `case create/show/list`, `ingest`,
-  `events`, `registry`, `timeline`, `lineage`, `entities`, `audit`,
-  `--version`. JSON output on every command (`--json`), structured
-  exit codes (0 ok / 2 error).
+  `events`, `registry`, `timeline`, `lineage`, `entities`, `detect`,
+  `rules list`, `audit`, `--version`. JSON output on every command
+  (`--json`), structured exit codes (0 ok / 1 findings / 2 error).
 - **Normalized event model** (the v1.0-stable core): UTC-normalized
   timestamps with originals preserved, host/user, source + event id,
   process and parent (name/pid), command line, network tuple,
@@ -104,14 +104,14 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - [x] **v0.2** — Windows Event/Sysmon/PowerShell ingestion
 - [x] **v0.3** — Prefetch, registry hives, scheduled tasks, services
 - [x] **v0.4** — Unified timeline, process lineage, entity views, gap reporting
-- [ ] **v0.5** — Explainable detection rules (never label malicious from a heuristic alone)
+- [x] **v0.5** — Explainable detection rules (never label malicious from a heuristic alone)
 - [ ] **v0.6** — MITRE ATT&CK mapping, Sigma-compatible rule ingestion
 - [ ] **v0.7** — Correlation engine, investigation graph export
 - [ ] **v0.8** — Case management (notes, findings, manifests, chain of custody), reports
 - [ ] **v0.9** — Analyst UI + ecosystem integrations (SentinelKit, LogLens, AegisForge)
 - [ ] **v1.0** — Stable schemas, release docs, benchmark/demo corpus, hardened plugin API
 
-## Limitations (v0.4)
+## Limitations (v0.5)
 
 - **Binary `.evtx` is not parsed**: the adapter detects it by magic
   bytes and prints the exact `wevtutil qe … /f:xml` command to export
@@ -130,11 +130,12 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - Parsers are validated against synthetic fixtures built to the
   published binary layouts; validation against live forensic copies
   is pending.
-- No detections, ATT&CK mapping, correlation, or reports (v0.5+).
+- No ATT&CK mapping, correlation, or reports (v0.6+).
   Amcache/Shimcache parsing is not yet implemented.
-- Parser flags (e.g. `encoded-command`, `image-in-temp-dir`) and all
-  v0.4 views (timeline, lineage, entities) are observations only —
-  nothing is ever labeled malicious by a parser.
+- Detections are heuristics, not verdicts: no v0.5 rule emits
+  `critical`, every finding separates observed facts from inferences,
+  and confidence scores always carry their reasoning. Parser flags and
+  the v0.4 views remain observations only.
 - Single-user local tool: the SQLite store has no access control;
   keep case directories on trusted storage.
 - Python 3.10–3.13, stdlib only (no third-party runtime dependencies).
@@ -143,7 +144,7 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 
 ```bash
 python -m pip install -e '.[dev]'
-pytest -q            # 199 tests, 86%+ coverage, 80% gate
+pytest -q            # 272 tests, 88%+ coverage, 80% gate
 ruff check . && ruff format --check . && mypy src
 ```
 

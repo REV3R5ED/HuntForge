@@ -3,6 +3,40 @@
 All notable changes to HuntForge are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-10-03
+
+### Added
+- Explainable detection rules (`huntforge.detections`, stdlib-only,
+  fully offline, registered in the plugin registry as `detections`
+  v0.5.0). Ten named, versioned rules over normalized events:
+  encoded PowerShell execution, PowerShell downloading remote content,
+  Office application spawning a shell/script interpreter, Run-key
+  persistence (MEDIUM, escalated to HIGH when the target binary is
+  observed executing), service with user-writable image path,
+  scheduled task with user-writable action, outbound connection to a
+  rare external port, failed-logon burst (5+/10 min), privileged logon
+  from a first-seen host, execution from a user-writable directory.
+- `huntforge detect --case ID [--rule ID] [--severity high+]
+  [--explain]`: runs the rule catalog (or selected rules), prints each
+  finding with its reasoning (`why`/`what`), cited evidence
+  (`event #N`), confidence plus justification, and observed-vs-inferred
+  separation. Findings are stored in the case (UIDs `HF-0001`, …) via
+  a new `findings` table and returned in the result envelope;
+  exit code is 1 when findings exist (`EXIT_FINDINGS`).
+- `huntforge rules list`: the detection rule catalog with severity,
+  description, and evidence requirements.
+- `docs/DETECTIONS.md`: per-rule documentation — logic,
+  false-positive profile, evidence requirements — plus the severity
+  model and deliberate omissions (no LSASS rule yet, no signature
+  data, no impossible travel, no `critical` from heuristics).
+- Findings feed back into the case store like v0.1 case findings;
+  272 tests, 88.5% coverage.
+
+### Changed
+- Exit codes are now 0 ok / 1 findings / 2 error (1 was previously
+  reserved for detections).
+
+
 ## [0.4.0] - 2026-10-03
 
 ### Added

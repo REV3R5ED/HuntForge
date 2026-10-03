@@ -3,6 +3,83 @@
 Scenario-driven walkthroughs for HuntForge. All output below is
 genuine — produced by running the commands against synthetic evidence.
 
+## Scenario (v0.5): explainable detections
+
+The same intrusion chain (invoice doc → PowerShell `-enc` → outbound
+connection → dropped payload → Run-key persistence), now run through
+v0.5's detection rules. Every finding cites its evidence and shows its
+reasoning — HuntForge reports *observed technique-shaped patterns*,
+never verdicts.
+
+### 1. Run the rule catalog
+
+```console
+$ huntforge detect --case CASE-005 --severity medium+
+3 finding(s): 2 high, 1 medium
+  [HF-0001] HIGH HF-DET-ENCPSH — Encoded PowerShell execution (confidence 80)
+    why: parser observation 'encoded-command' on event #2 (not a verdict — see rule docs)
+    why: command line contains an -EncodedCommand/-enc switch
+    why: process is powershell.exe (PowerShell host)
+    evidence: event #2 (sysmon:1) — process creation: powershell.exe pid 7422, command line indicates encoded execution
+  [HF-0002] HIGH HF-DET-OFFICE — Office application spawning shell/script interpreter (confidence 70)
+    why: parent process is winword.exe (Office application)
+    why: child process is powershell.exe (shell/script host)
+    why: parent pid 3131 -> child pid 7422 on event #2
+    evidence: event #2 (sysmon:1) — process ancestry: winword.exe (pid 3131) -> powershell.exe (pid 7422)
+  [HF-0003] MEDIUM HF-DET-RUNKEY — Run-key persistence (confidence 60)
+    why: registry Run/RunOnce value sets persistence: HKCU\...\CurrentVersion\Run\Updater
+    why: persistence target: C:\Users\m.alvarez\AppData\Local\Temp\svchost.exe
+    why: no execution of the target binary observed in this case
+    evidence: event #5 (sysmon:13) — Run-key value: HKCU\...\CurrentVersion\Run\Updater
+```
+
+Exit code is `1` — findings exist (not an error). Rules with no
+applicable telemetry are named at the end, so "no findings" is
+distinguishable from "no data".
+
+### 2. Explain one finding
+
+```console
+$ huntforge detect --case CASE-005 --rule HF-DET-ENCPSH --explain
+1 finding(s): 1 high
+  [HF-0001] HIGH HF-DET-ENCPSH — Encoded PowerShell execution (confidence 80)
+    why: parser observation 'encoded-command' on event #2 (not a verdict — see rule docs)
+    why: command line contains an -EncodedCommand/-enc switch
+    why: process is powershell.exe (PowerShell host)
+    evidence: event #2 (sysmon:1) — process creation: powershell.exe pid 7422, command line indicates encoded execution
+    what: PowerShell executed with an encoded command on WS-FIN-014 as FIN-014\m.alvarez: powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand aQBmACgAWwBJAG8ALgBGAFkAcwBpAG8AbgBdADoA
+    confidence: Encoded execution is a well-known obfuscation technique, but administrators also use -EncodedCommand legitimately; one signal alone cannot confirm intent.
+    observed: powershell.exe started with an encoded-command switch at 2026-10-02T09:12:41Z
+    inferred (analyst decides): the actor may be hiding the true command from casual inspection (analyst judgment required)
+```
+
+### 3. Narrow the run
+
+```console
+$ huntforge detect --case CASE-005 --rule HF-DET-RUNKEY --severity medium
+$ huntforge rules list          # the 10-rule catalog with severities
+$ huntforge detect --case CASE-005 --json | python -c "import json,sys; print(json.load(sys.stdin)['data']['by_severity'])"
+```
+
+Findings are stored in the case (`HF-0001`, `HF-0002`, …) alongside
+the v0.1 case data, and appear in the result envelope's `findings`
+list. The full rule catalog — logic, false-positive profiles,
+evidence requirements — lives in [DETECTIONS.md](DETECTIONS.md).
+
+![HuntForge v0.5 detections](images/05-detect.png)
+
+### Honest limitations (v0.5)
+
+- Detections are heuristics, not verdicts: no v0.5 rule emits
+  `critical`, and every finding separates observed facts from
+  inferences.
+- Rules only see normalized fields — without command-line logging
+  (Sysmon config / 4688 auditing), several rules cannot fire.
+- The writable-directory and executable-path heuristics are
+  string-based; obfuscated command lines may be missed or misread.
+- `HF-DET-ADMINHOST` needs history to establish "normal" sources; a
+  case that starts mid-incident has no baseline.
+
 ## Scenario (v0.4): reconstruct the intrusion
 
 The v0.2 intrusion chain (invoice doc → PowerShell `-enc` → outbound
