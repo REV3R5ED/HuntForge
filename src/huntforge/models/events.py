@@ -9,6 +9,10 @@ rejected at construction time.
 Design notes for future phases:
 - ``timestamp`` is always UTC ISO-8601 ending in ``Z``;
   ``timestamp_original`` preserves the value exactly as ingested.
+  When the parser cannot recover an original timestamp it passes
+  ``timestamp_original=None`` explicitly (the stored ``timestamp`` is
+  then only a placeholder such as the ingest time); omitting the
+  argument fills in the ingested value.
 - ``event_id`` is coerced to ``str`` (Sysmon uses ints, EVTX uses
   ints, some sources use strings).
 - ``hashes`` maps algorithm name (lowercase, e.g. ``"sha256"``) to
@@ -23,6 +27,7 @@ Design notes for future phases:
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from enum import Enum, auto
 from typing import Any
 
 from huntforge.core.logging import TimestampError, normalize_timestamp
@@ -30,6 +35,21 @@ from huntforge.core.logging import TimestampError, normalize_timestamp
 
 class EventValidationError(ValueError):
     """Raised when a normalized event fails validation."""
+
+
+class _Unset(Enum):
+    """Sentinel marking an omitted ``timestamp_original``.
+
+    Omitted (``_UNSET``) means "not provided": the model fills in the
+    ingested value. An explicit ``None`` means "the parser could not
+    recover an original timestamp" (the stored timestamp is only a
+    placeholder, e.g. the ingest time) and is preserved as ``None``.
+    """
+
+    UNSET = auto()
+
+
+_UNSET_SENTINEL: Any = _Unset.UNSET
 
 
 @dataclass
@@ -93,7 +113,9 @@ class NormalizedEvent:
     source: str  # e.g. "evtx:Security", "sysmon", "powershell"
     event_id: str  # coerced to str
     provenance: Provenance
-    timestamp_original: str | None = None
+    # Omitted -> filled with the ingested value; explicit None -> the
+    # parser could not recover an original timestamp (placeholder only).
+    timestamp_original: str | None = _UNSET_SENTINEL  # type: ignore[assignment]
     host: str | None = None
     user: str | None = None
     process_name: str | None = None
@@ -127,8 +149,11 @@ class NormalizedEvent:
         except TimestampError as exc:
             raise EventValidationError(f"invalid timestamp: {exc}") from exc
         self.timestamp = utc
-        if self.timestamp_original is None:
+        if self.timestamp_original is _UNSET_SENTINEL:
+            # Not provided: preserve the ingested value as the original.
             self.timestamp_original = original
+        # An explicit None is preserved: the parser could not recover an
+        # original timestamp (v0.4 timeline lists these as "untimed").
         for int_field in ("process_id", "parent_id", "src_port", "dst_port"):
             value = getattr(self, int_field)
             if value is not None and not isinstance(value, int):

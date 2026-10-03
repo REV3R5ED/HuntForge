@@ -3,6 +3,112 @@
 Scenario-driven walkthroughs for HuntForge. All output below is
 genuine — produced by running the commands against synthetic evidence.
 
+## Scenario (v0.4): reconstruct the intrusion
+
+The v0.2 intrusion chain (invoice doc → PowerShell `-enc` → outbound
+connection → dropped payload → Run-key persistence) now has matching
+Prefetch, scheduled-task, and registry-hive artifacts. v0.4's
+observation tools — timeline, lineage, entities — reconstruct the
+attack from all of them at once. No verdicts: these commands
+reorganize what was ingested; judgments are the analyst's (and v0.5's).
+
+### 1. Create a case and ingest
+
+```console
+$ huntforge case create CASE-004 --name "Intrusion reconstruction"
+case 'CASE-004' created
+$ huntforge ingest ./evidence-intrusion --case CASE-004
+registered 5 evidence file(s), parsed 14 event(s) [prefetch: 1, registry: 4, security: 3, sysmon: 5, tasks: 1]
+```
+
+### 2. One timeline across every source
+
+```console
+$ huntforge timeline --case CASE-004
+timeline: 14 timed event(s), 0 untimed
+  sources: evtx:Security: 3, prefetch: 1, registry: 2, services: 2, sysmon: 5, tasks: 1
+  timed (14):
+    2026-10-02T08:57:58Z [7] evtx:Security:4624 host=WS-FIN-014 user=FIN-014\m.alvarez process=-
+    2026-10-02T09:11:03Z [10] WINWORD.EXE(3131) started by explorer.exe(2048)
+    2026-10-02T09:12:41Z [1] POWERSHELL.EXE executed (prefetch evidence, run_count=3)
+    2026-10-02T09:12:41Z [9] powershell.exe(7422) created (parent WINWORD.EXE)
+    2026-10-02T09:12:41Z [11] powershell.exe(7422) started by WINWORD.EXE(3131)
+    2026-10-02T09:13:02Z [12] powershell.exe(7422) -> 203.0.113.44:443 (from 192.168.1.50)
+    2026-10-02T09:13:20Z [13] powershell.exe(7422) created file C:\Users\m.alvarez\AppData\Local\Temp\svchost.exe
+    2026-10-02T09:14:55Z [2] persistence: Software\Microsoft\Windows\CurrentVersion\Run\Updater
+    2026-10-02T09:14:55Z [3] persistence: Software\Microsoft\Windows\CurrentVersion\RunOnce\Once
+    2026-10-02T09:14:55Z [14] svchost.exe(8110) registry HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Updater
+    2026-10-02T09:15:00Z [6] scheduled task: task \Updater | triggers=LogonTrigger@2026-10-02T09:15:00
+    2026-10-02T09:15:44Z [8] evtx:Security:4625 host=WS-FIN-014 user=CORP\Administrator process=-
+```
+
+Telemetry and forensics interleave: the Sysmon process creation, the
+Prefetch execution evidence, the registry persistence scan, and the
+scheduled task all land on one UTC-normalized timeline, each keeping
+its verbatim original timestamp. Narrow the window with
+`--from`/`--to`, or one source with `--source sysmon`. Events whose
+parser could not recover an original timestamp are listed under
+`untimed` — never dropped, never placed.
+
+### 3. Process lineage
+
+```console
+$ huntforge lineage --case CASE-004
+lineage: 2 process instance(s)
+  WINWORD.EXE (3131)  [2026-10-02T09:11:03Z] user=FIN-014\m.alvarez  <parent pid 2048 not observed>
+     └─ powershell.exe (7422)  [2026-10-02T09:12:41Z] user=FIN-014\m.alvarez  <2 related event(s)>
+```
+
+The Sysmon and Security creation records for PID 7422 describe the
+same start, so they merge into one instance; the network connection
+and file drop attach as corroborating references. The parent PID 2048
+was never observed, so it is labeled as such — not invented.
+Focus with `--pid 7422` or `--image powershell`.
+
+PID reuse is handled honestly: if PID 7422 later starts a different
+image, the two become separate instances, the reused PID is flagged,
+and a child of that PID links to the latest plausible parent with an
+explicit `ambiguous parent` note naming every candidate.
+
+### 4. Entities across sources
+
+```console
+$ huntforge entities --case CASE-004 --type user
+4 entities of type user
+  user:
+    administrator@corp (seen as: CORP\Administrator) — 1 observation(s) [evtx:Security]
+    localsystem (seen as: LocalSystem) — 1 observation(s) [services]
+    m.alvarez@fin-014 (seen as: FIN-014\m.alvarez) — 8 observation(s) [evtx:Security, sysmon, tasks]
+    networkservice@nt authority (seen as: NT AUTHORITY\NetworkService) — 1 observation(s) [services]
+$ huntforge entities --case CASE-004 --type ip
+4 entities of type ip
+  ip:
+    127.0.0.1 — 1 observation(s) [evtx:Security]
+    192.168.1.50 — 1 observation(s) [sysmon]
+    203.0.113.44 — 1 observation(s) [sysmon]
+    203.0.113.99 — 1 observation(s) [evtx:Security]
+```
+
+`FIN-014\m.alvarez` and `m.alvarez@fin-014` resolve to one entity;
+hosts, file paths, registry keys, and hashes normalize the same way,
+with every observed spelling kept. All three commands emit the same
+data as JSON with `--json`.
+
+![HuntForge v0.4 timeline, lineage, entities](images/04-timeline.png)
+
+### Honest limitations (v0.4)
+
+- Timeline ordering is only as good as source clocks; clock skew
+  between hosts is not corrected.
+- Lineage links a child to the latest parent instance whose start
+  precedes the child's; short-lived processes that exit before their
+  child is recorded can mislead the heuristic — the ambiguity note is
+  the safety net, not a guarantee.
+- Entities normalize mechanically (`DOMAIN\user` → `user@domain`,
+  case-insensitive paths/hosts); distinct users sharing a name on
+  different domains are kept distinct, but lookalike Unicode names are
+  not canonicalized.
+
 ## Scenario (v0.3): persistence artifacts
 
 A workstation was reimaged, but you kept forensic copies: a Prefetch

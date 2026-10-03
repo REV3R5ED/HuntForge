@@ -14,17 +14,22 @@ default, every detection is explainable with preserved evidence, humans
 make the final judgment, and observed facts are always distinguished
 from inference.
 
-## v0.3 — what works today
+## v0.4 — what works today
 
 - **Core CLI** (`huntforge`): `case create/show/list`, `ingest`,
-  `events`, `registry`, `audit`, `--version`. JSON output on every
-  command (`--json`), structured exit codes (0 ok / 2 error).
+  `events`, `registry`, `timeline`, `lineage`, `entities`, `audit`,
+  `--version`. JSON output on every command (`--json`), structured
+  exit codes (0 ok / 2 error).
 - **Normalized event model** (the v1.0-stable core): UTC-normalized
   timestamps with originals preserved, host/user, source + event id,
   process and parent (name/pid), command line, network tuple,
   file path, registry key, hashes, parser-observation **flags**, raw
   reference — and **mandatory provenance** (source file, record index,
   parser name/version, ingest time, source SHA-256) on every event.
+  v0.4 fix: an explicit `timestamp_original=None` (parser could not
+  recover an original timestamp) is now preserved instead of being
+  filled in — those events surface as *untimed*, never placed on a
+  timeline.
 - **Telemetry parsers** (stdlib-only, fully offline): Sysmon
   (EventIDs 1/3/7/11/12/13/14), Security log (4624/4625/4634/4647
   logon/logoff, 4688 process creation with hex-PID decoding),
@@ -47,6 +52,22 @@ from inference.
   - Services: JSON exports or a `SYSTEM` hive's `Services` key →
     `services:service` events with `auto-start` /
     `image-in-temp-dir` / `unquoted-service-path` observations.
+- **Unified timeline** (`huntforge timeline --case ID [--from TS]
+  [--to TS] [--source TYPE]`): every event with an original timestamp
+  merged into one UTC-chronological view with per-source coverage
+  (counts, first/last seen); events without one go in an `untimed`
+  section — never dropped, never invented.
+- **Process lineage** (`huntforge lineage --case ID [--pid N |
+  --image NAME]`): parent→child trees from Sysmon 1 / Security 4688
+  creation records. Same (host, PID, image) merges into one instance;
+  PID reuse becomes separate instances with the reused PID flagged,
+  and an ambiguous child links to the latest plausible parent with an
+  explicit note naming every candidate.
+- **Entity resolution** (`huntforge entities --case ID [--type T]`):
+  hosts case-insensitive, `DOMAIN\user` → `user@domain`, file paths
+  and registry keys case-insensitive, hashes lowercased — with every
+  observed spelling, per-source observation counts, and first/last
+  seen. Observation only: no verdicts (v0.5).
 - **Evidence ingest**: registers files with SHA-256 + MD5 hashing
   (sources never modified; duplicates deduped by hash), auto-detects
   the source kind by content (`--source` overrides, `--no-parse`
@@ -69,6 +90,9 @@ huntforge ingest ./evidence --case CASE-001
 huntforge ingest ./evidence --case CASE-001 --fixture events.jsonl
 huntforge events --case CASE-001 --process powershell.exe
 huntforge events --case CASE-001 --host WS-001 --keyword mimikatz --json
+huntforge timeline --case CASE-001
+huntforge lineage --case CASE-001 --image powershell
+huntforge entities --case CASE-001 --type ip
 huntforge audit --case CASE-001
 ```
 
@@ -79,7 +103,7 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - [x] **v0.1** — Core CLI, normalized event model, JSON output, provenance
 - [x] **v0.2** — Windows Event/Sysmon/PowerShell ingestion
 - [x] **v0.3** — Prefetch, registry hives, scheduled tasks, services
-- [ ] **v0.4** — Unified timeline, process lineage, entity views, gap reporting
+- [x] **v0.4** — Unified timeline, process lineage, entity views, gap reporting
 - [ ] **v0.5** — Explainable detection rules (never label malicious from a heuristic alone)
 - [ ] **v0.6** — MITRE ATT&CK mapping, Sigma-compatible rule ingestion
 - [ ] **v0.7** — Correlation engine, investigation graph export
@@ -87,7 +111,7 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - [ ] **v0.9** — Analyst UI + ecosystem integrations (SentinelKit, LogLens, AegisForge)
 - [ ] **v1.0** — Stable schemas, release docs, benchmark/demo corpus, hardened plugin API
 
-## Limitations (v0.3)
+## Limitations (v0.4)
 
 - **Binary `.evtx` is not parsed**: the adapter detects it by magic
   bytes and prints the exact `wevtutil qe … /f:xml` command to export
@@ -98,14 +122,19 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - **Registry**: offline forensic copies only (never the live
   registry). No transaction-log replay, no deleted-cell recovery, no
   multi-cell (`db`) large values, no security descriptors.
+- **Timeline**: ordering is only as good as source clocks; clock skew
+  between hosts is not corrected.
+- **Lineage**: a child links to the latest parent instance whose
+  start precedes the child's; short-lived processes can mislead the
+  heuristic — the ambiguity note is the safety net, not a guarantee.
 - Parsers are validated against synthetic fixtures built to the
   published binary layouts; validation against live forensic copies
   is pending.
-- No timeline, detections, ATT&CK mapping, correlation, or reports
-  (v0.4+). Amcache/Shimcache parsing is not yet implemented.
-- Parser flags (e.g. `encoded-command`, `image-in-temp-dir`) are
-  observations only — v0.5 detections will act on them; nothing is
-  ever labeled malicious by a parser.
+- No detections, ATT&CK mapping, correlation, or reports (v0.5+).
+  Amcache/Shimcache parsing is not yet implemented.
+- Parser flags (e.g. `encoded-command`, `image-in-temp-dir`) and all
+  v0.4 views (timeline, lineage, entities) are observations only —
+  nothing is ever labeled malicious by a parser.
 - Single-user local tool: the SQLite store has no access control;
   keep case directories on trusted storage.
 - Python 3.10–3.13, stdlib only (no third-party runtime dependencies).

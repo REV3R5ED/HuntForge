@@ -1,5 +1,7 @@
 """HuntForge CLI: ``huntforge case ...`` / ``huntforge ingest ...`` /
-``huntforge events ...`` / ``huntforge registry ...``.
+``huntforge events ...`` / ``huntforge registry ...`` /
+``huntforge timeline ...`` / ``huntforge lineage ...`` /
+``huntforge entities ...``.
 
 Every command returns a shared result envelope, renders human-readable
 text by default (``--json`` for automation), uses structured exit
@@ -7,9 +9,8 @@ codes (0 ok / 2 error; 1 is reserved for future detection findings),
 and writes an audit record to the case when one is involved.
 Diagnostics go to stderr; stdout carries only the requested output.
 
-v0.3 adds persistence-artifact parsers (Prefetch, offline registry
-hives, scheduled tasks, services) and a ``registry`` command for
-targeted reads of offline hives.
+v0.4 adds the observation tools: unified cross-source timeline,
+process lineage trees, and entity resolution (no verdicts — v0.5).
 """
 
 from __future__ import annotations
@@ -36,13 +37,26 @@ from huntforge.ingest.service import ingest_path, load_fixture
 from huntforge.parsers import SOURCE_KINDS
 from huntforge.parsers.registry import Hive, HiveError, KeyNotFoundError
 from huntforge.store.db import CaseDB, CaseError
+from huntforge.timeline import entities as entities_mod
+from huntforge.timeline import lineage as lineage_mod
+from huntforge.timeline import timeline as timeline_mod
 
 plugins_mod.register(
     plugins_mod.ModuleInfo(
         name="core",
         description="Core CLI, normalized event model, case store, ingest",
         version=__version__,
-        commands=["case", "ingest", "events", "registry", "audit", "version"],
+        commands=[
+            "case",
+            "ingest",
+            "events",
+            "registry",
+            "audit",
+            "version",
+            "timeline",
+            "lineage",
+            "entities",
+        ],
     )
 )
 
@@ -167,6 +181,51 @@ def build_parser() -> argparse.ArgumentParser:
     registry_p.add_argument("hive", help="Path to the hive file (e.g. NTUSER.DAT)")
     registry_p.add_argument(
         "key", help=r"Key path, e.g. Software\Microsoft\Windows\CurrentVersion\Run"
+    )
+
+    timeline_p = sub.add_parser(
+        "timeline", help="Unified chronological timeline (observation only)"
+    )
+    timeline_p.add_argument("--case", required=True, help="Case identifier")
+    timeline_p.add_argument(
+        "--from", dest="from_ts", default=None, help="Start of window (ISO timestamp)"
+    )
+    timeline_p.add_argument(
+        "--to", dest="to_ts", default=None, help="End of window (ISO timestamp)"
+    )
+    timeline_p.add_argument(
+        "--source", default=None, help="Filter by source prefix (e.g. sysmon)"
+    )
+    timeline_p.add_argument(
+        "--limit", type=int, default=500, help="Max timed entries (default 500)"
+    )
+
+    lineage_p = sub.add_parser(
+        "lineage", help="Process lineage trees (observation only)"
+    )
+    lineage_p.add_argument("--case", required=True, help="Case identifier")
+    lineage_p.add_argument(
+        "--pid",
+        type=int,
+        default=None,
+        help="Focus on this PID (ancestors + descendants)",
+    )
+    lineage_p.add_argument(
+        "--image",
+        default=None,
+        help="Focus on processes with this image name (case-insensitive)",
+    )
+
+    entities_p = sub.add_parser(
+        "entities", help="Resolved entities across sources (observation only)"
+    )
+    entities_p.add_argument("--case", required=True, help="Case identifier")
+    entities_p.add_argument(
+        "--type",
+        dest="entity_type",
+        default=None,
+        choices=list(entities_mod.ENTITY_TYPES),
+        help="Only show this entity type",
     )
 
     return parser
@@ -355,6 +414,134 @@ def cmd_registry(
     return result, None  # no case involved: no audit record
 
 
+def cmd_timeline(
+    args: argparse.Namespace, state_dir: Path
+) -> tuple[Result, str | None]:
+    result = Result(command="timeline")
+    service = CaseService(state_dir)
+    try:
+        db = service.open_db(args.case)
+    except CaseError as exc:
+        result.fail(str(exc))
+        return result, None
+    try:
+        try:
+            options = timeline_mod.TimelineOptions(
+                from_ts=args.from_ts,
+                to_ts=args.to_ts,
+                source=args.source,
+                limit=args.limit,
+            )
+        except ValueError as exc:
+            result.fail(f"invalid options: {exc}")
+            return result, args.case
+        try:
+            built = timeline_mod.build_timeline(db, options)
+        except ValueError as exc:
+            result.fail(str(exc))
+            return result, args.case
+        data = built.to_dict()
+        result.data = data
+        timed_n = data["coverage"]["timed_count"]
+        untimed_n = data["coverage"]["untimed_count"]
+        result.summary = f"timeline: {timed_n} timed event(s), {untimed_n} untimed"
+        if built.truncated:
+            result.summary += f" (showing first {len(built.timed)})"
+    finally:
+        db.close()
+    return result, args.case
+
+
+def cmd_lineage(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | None]:
+    result = Result(command="lineage")
+    service = CaseService(state_dir)
+    try:
+        db = service.open_db(args.case)
+    except CaseError as exc:
+        result.fail(str(exc))
+        return result, None
+    try:
+        forest = lineage_mod.build_lineage(db)
+        instances = forest["instances"]
+        if args.pid is not None and args.image:
+            result.fail("use only one of --pid or --image")
+            return result, args.case
+        focus_keys: list[str] = []
+        if args.pid is not None:
+            focus_keys = [k for k, v in instances.items() if v.pid == args.pid]
+            if not focus_keys:
+                result.fail(f"no process instance with pid {args.pid}")
+                return result, args.case
+        elif args.image:
+            needle = args.image.lower()
+            focus_keys = [k for k, v in instances.items() if needle in v.image.lower()]
+            if not focus_keys:
+                result.fail(f"no process instance matching image {args.image!r}")
+                return result, args.case
+        if focus_keys:
+            # Ancestors of every focus instance plus their descendants.
+            roots: list[str] = []
+            for key in focus_keys:
+                chain = lineage_mod.ancestors(forest, key)
+                if chain[0] not in roots:
+                    roots.append(chain[0])
+            shown: set[str] = set()
+            for key in focus_keys:
+                shown.update(lineage_mod.descendants(forest, key))
+                shown.update(lineage_mod.ancestors(forest, key))
+            result.data = {
+                "focus": [
+                    lineage_mod.instance_to_dict(instances[k]) for k in focus_keys
+                ],
+                "shown_instances": sorted(shown),
+                "trees": lineage_mod.render_forest(forest, roots),
+            }
+            result.summary = (
+                f"lineage: {len(focus_keys)} matching instance(s), {len(shown)} shown"
+            )
+        else:
+            result.data = {
+                "roots": forest["roots"],
+                "instance_count": forest["instance_count"],
+                "reused_pids": forest["reused_pids"],
+                "trees": lineage_mod.render_forest(forest, forest["roots"]),
+            }
+            summary = f"lineage: {forest['instance_count']} process instance(s)"
+            if forest["reused_pids"]:
+                summary += f", pid reuse: {', '.join(forest['reused_pids'])}"
+            result.summary = summary
+    finally:
+        db.close()
+    return result, args.case
+
+
+def cmd_entities(
+    args: argparse.Namespace, state_dir: Path
+) -> tuple[Result, str | None]:
+    result = Result(command="entities")
+    service = CaseService(state_dir)
+    try:
+        db = service.open_db(args.case)
+    except CaseError as exc:
+        result.fail(str(exc))
+        return result, None
+    try:
+        resolved = entities_mod.resolve_entities(db)
+        if args.entity_type:
+            resolved = [e for e in resolved if e.type == args.entity_type]
+        result.data = {
+            "entities": [e.to_dict() for e in resolved],
+            "count": len(resolved),
+            "entity_type": args.entity_type,
+        }
+        result.summary = f"{len(resolved)} entit{'y' if len(resolved) == 1 else 'ies'}"
+        if args.entity_type:
+            result.summary += f" of type {args.entity_type}"
+    finally:
+        db.close()
+    return result, args.case
+
+
 def _human_registry(data: dict[str, Any]) -> None:
     print(f"  path: {data.get('path')}")
     print(f"  last_write: {data.get('last_write') or '-'}")
@@ -372,6 +559,65 @@ def _human_registry(data: dict[str, Any]) -> None:
         print(f"    {name} [{value.get('type_name')}] = {val_data}")
 
 
+def _human_timeline(data: dict[str, Any]) -> None:
+    coverage = data.get("coverage") or {}
+    sources = coverage.get("sources") or {}
+    if sources:
+        bits = ", ".join(
+            f"{name}: {info['events']}" for name, info in sorted(sources.items())
+        )
+        print(f"  sources: {bits}")
+    time_filter = coverage.get("time_filter") or {}
+    if time_filter.get("from") or time_filter.get("to"):
+        start = time_filter.get("from") or "…"
+        end = time_filter.get("to") or "…"
+        print(f"  window: {start} .. {end}")
+    timed = data.get("timed") or []
+    print(f"  timed ({len(timed)}):")
+    for entry in timed:
+        print(f"    {entry['timestamp']} [{entry['id']}] {entry['summary']}")
+    if data.get("truncated"):
+        print("    … truncated (raise --limit)")
+    untimed = data.get("untimed") or []
+    if untimed:
+        print(f"  untimed ({len(untimed)} — no original timestamp, never placed):")
+        for entry in untimed:
+            print(
+                f"    [#{entry['id']}] {entry['source']}:{entry['event_id']}"
+                f" — {entry['summary']}"
+            )
+    note = coverage.get("note")
+    if note:
+        print(f"  note: {note}")
+
+
+def _human_lineage(data: dict[str, Any]) -> None:
+    if data.get("reused_pids"):
+        print(f"  pid reuse observed: {', '.join(data['reused_pids'])}")
+    trees = data.get("trees") or []
+    for line in trees:
+        print(f"  {line}" if line else "")
+
+
+def _human_entities(data: dict[str, Any]) -> None:
+    entities = data.get("entities") or []
+    current_type = ""
+    for entity in entities:
+        if entity["type"] != current_type:
+            current_type = entity["type"]
+            print(f"  {current_type}:")
+        variants = ""
+        if (
+            len(entity["observed_as"]) > 1
+            or entity["observed_as"][0] != entity["value"]
+        ):
+            variants = f" (seen as: {', '.join(entity['observed_as'])})"
+        print(
+            f"    {entity['value']}{variants} — {entity['count']} observation(s) "
+            f"[{', '.join(entity['sources'])}]"
+        )
+
+
 def render(result: Result, as_json: bool) -> None:
     if as_json:
         _print_json(result)
@@ -382,6 +628,15 @@ def render(result: Result, as_json: bool) -> None:
     print(result.summary or "ok")
     if result.command == "registry" and result.data:
         _human_registry(result.data)
+        return
+    if result.command == "timeline" and result.data:
+        _human_timeline(result.data)
+        return
+    if result.command == "lineage" and result.data:
+        _human_lineage(result.data)
+        return
+    if result.command == "entities" and result.data:
+        _human_entities(result.data)
         return
     if result.data:
         for key, value in result.data.items():
@@ -436,6 +691,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "events": cmd_events,
         "audit": cmd_audit,
         "registry": cmd_registry,
+        "timeline": cmd_timeline,
+        "lineage": cmd_lineage,
+        "entities": cmd_entities,
     }
     handler = handlers.get(args.command)
     if handler is None:  # pragma: no cover - argparse guards this

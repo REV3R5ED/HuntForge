@@ -2,12 +2,13 @@
 
 "Hunt the endpoint. Reconstruct the attack."
 
-v0.3 is persistence artifacts: Prefetch (.pf) binaries, offline
-registry hives (Run/RunOnce scan, targeted reads via ``huntforge
-registry``), scheduled-task XML exports and service enumerations.
+v0.4 is the observation layer: a unified cross-source timeline
+(UTC-normalized, originals preserved, untimed events never dropped),
+process lineage trees with honest PID-reuse handling, and
+cross-source entity resolution. No verdicts — detections are v0.5.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __author__ = "Pouya Shini Karim"
 
 from huntforge.core import config, logging, plugins, results

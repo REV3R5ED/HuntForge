@@ -3,6 +3,53 @@
 All notable changes to HuntForge are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-10-03
+
+### Added
+- Observation layer (`huntforge.timeline`, stdlib-only, fully offline,
+  registered in the plugin registry as `timeline` v0.4.0). All three
+  tools reorganize ingested evidence — no verdicts, no invented
+  timestamps (v0.5 does detections):
+  - `huntforge timeline --case ID [--from TS] [--to TS] [--source TYPE]
+    [--limit N]`: one UTC-chronological view across every ingested
+    source, with per-source coverage (event counts, first/last seen).
+    Events whose parser could not recover an original timestamp are
+    listed in an `untimed` section — never dropped, never placed.
+    `--from`/`--to` do not affect untimed events (documented).
+  - `huntforge lineage --case ID [--pid N | --image NAME]`: parent→child
+    process trees from Sysmon EventID 1 / Security 4688 creation
+    records, rendered as ASCII trees and JSON. Same (host, PID, image)
+    merges into one instance; non-creation events attach as
+    corroborating references. PID reuse becomes separate instances
+    (reused PIDs flagged); an ambiguous child links to the latest
+    plausible parent with an explicit note naming every candidate;
+    unobserved parents are labeled, never invented.
+  - `huntforge entities --case ID [--type T]`: cross-source entity
+    resolution — hosts case-insensitive, `DOMAIN\user` →
+    `user@domain`, file paths and registry keys case-insensitive,
+    hashes lowercased — with every observed spelling, per-source
+    observation counts, and first/last seen. Types: host, user, ip,
+    process, file, hash, registry.
+- `CaseDB.all_events()`: unfiltered deterministic event access for the
+  observation tools (no schema change).
+- New synthetic fixtures: `intrusion_powershell.pf`,
+  `intrusion_task.xml`, `intrusion_task_nodate.xml` (untimed),
+  `intrusion_runkey.dat`, `pidreuse_sysmon.json`
+  (`tests/fixtures/make_fixtures_04.py`); `build_hive` now accepts
+  custom Run values.
+- Docs: `docs/USAGE.md` v0.4 intrusion-reconstruction scenario with
+  genuine output, `docs/images/04-timeline.png` (house style),
+  README v0.4 section.
+- Tests: `tests/test_timeline.py` (28 tests). Total: 227 tests,
+  87.5% coverage.
+
+### Fixed
+- `NormalizedEvent`: an explicit `timestamp_original=None` (parser
+  could not recover an original timestamp) is now preserved instead
+  of being filled in with the placeholder timestamp. Omitting the
+  argument still fills in the ingested value (sentinel-based; backward
+  compatible). This is what lets the timeline's `untimed` section work.
+
 ## [0.3.0] - 2026-10-03
 
 ### Added
