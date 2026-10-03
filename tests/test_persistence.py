@@ -339,8 +339,10 @@ class TestTasks:
         )
         assert len(events) == 1
         assert events[0].timestamp == "2026-10-03T00:00:00Z"
-        # the model fills timestamp_original from the input when absent
-        assert events[0].timestamp_original == "2026-10-03T00:00:00Z"
+        # v0.4: an explicit None original is preserved (untimed in the
+        # timeline) — the model only fills it in when the argument is
+        # omitted entirely.
+        assert events[0].timestamp_original is None
 
     def test_registration_date_used_when_no_boundary(self, tmp_path):
         target = tmp_path / "regdate.xml"
