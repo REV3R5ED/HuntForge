@@ -1,0 +1,211 @@
+<Events>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-Sysmon" Guid="5770385f-c22a-43e0-bf4c-06f5698ffbd9"/>
+      <EventID>1</EventID>
+      <Version>5</Version>
+      <Level>4</Level>
+      <Task>1</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x8000000000000000</Keywords>
+      <TimeCreated SystemTime="2026-10-02T08:58:00.0410000Z"/>
+      <EventRecordID>101</EventRecordID>
+      <Channel>Microsoft-Windows-Sysmon/Operational</Channel>
+      <Computer>WS-FIN-014</Computer>
+      <Security UserID="S-1-5-21-1111111111-2222222222-3333333333-1001"/>
+    </System>
+    <EventData>
+      <Data Name="RuleName">-</Data>
+      <Data Name="UtcTime">2026-10-02 08:58:00.041</Data>
+      <Data Name="ProcessGuid">{11111111-1111-1111-1111-111111111111}</Data>
+      <Data Name="ProcessId">2048</Data>
+      <Data Name="Image">C:\Windows\explorer.exe</Data>
+      <Data Name="FileVersion">10.0.19041.1</Data>
+      <Data Name="Description">Windows Explorer</Data>
+      <Data Name="Product">Microsoft Windows</Data>
+      <Data Name="Company">Microsoft Corporation</Data>
+      <Data Name="OriginalFileName">explorer.exe</Data>
+      <Data Name="CommandLine">C:\Windows\explorer.exe</Data>
+      <Data Name="CurrentDirectory">C:\Windows\</Data>
+      <Data Name="User">FIN-014\m.alvarez</Data>
+      <Data Name="LogonGuid">{22222222-2222-2222-2222-222222222222}</Data>
+      <Data Name="LogonId">0x3e7</Data>
+      <Data Name="TerminalSessionId">1</Data>
+      <Data Name="IntegrityLevel">Medium</Data>
+      <Data Name="Hashes">SHA256=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA,MD5=BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB,IMPHASH=CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC</Data>
+      <Data Name="ParentProcessGuid">{00000000-0000-0000-0000-000000000000}</Data>
+      <Data Name="ParentProcessId">1024</Data>
+      <Data Name="ParentImage">C:\Windows\System32\userinit.exe</Data>
+      <Data Name="ParentCommandLine">C:\Windows\system32\userinit.exe</Data>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-Sysmon" Guid="5770385f-c22a-43e0-bf4c-06f5698ffbd9"/>
+      <EventID>3</EventID>
+      <TimeCreated SystemTime="2026-10-02T09:05:11.5000000Z"/>
+      <EventRecordID>102</EventRecordID>
+      <Channel>Microsoft-Windows-Sysmon/Operational</Channel>
+      <Computer>WS-FIN-014</Computer>
+    </System>
+    <EventData>
+      <Data Name="RuleName">-</Data>
+      <Data Name="UtcTime">2026-10-02 09:05:11.500</Data>
+      <Data Name="ProcessGuid">{33333333-3333-3333-3333-333333333333}</Data>
+      <Data Name="ProcessId">5500</Data>
+      <Data Name="Image">C:\Program Files\Google\Chrome\Application\chrome.exe</Data>
+      <Data Name="User">FIN-014\m.alvarez</Data>
+      <Data Name="Protocol">tcp</Data>
+      <Data Name="Initiated">true</Data>
+      <Data Name="SourceIsIpv6">false</Data>
+      <Data Name="SourceIp">192.168.1.50</Data>
+      <Data Name="SourceHostname">WS-FIN-014.corp.example</Data>
+      <Data Name="SourcePort">51234</Data>
+      <Data Name="SourcePortName">-</Data>
+      <Data Name="DestinationIsIpv6">false</Data>
+      <Data Name="DestinationIp">142.250.80.14</Data>
+      <Data Name="DestinationHostname">-</Data>
+      <Data Name="DestinationPort">443</Data>
+      <Data Name="DestinationPortName">https</Data>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-Sysmon" Guid="5770385f-c22a-43e0-bf4c-06f5698ffbd9"/>
+      <EventID>1</EventID>
+      <TimeCreated SystemTime="2026-10-02T09:11:03.7720000Z"/>
+      <EventRecordID>103</EventRecordID>
+      <Channel>Microsoft-Windows-Sysmon/Operational</Channel>
+      <Computer>WS-FIN-014</Computer>
+    </System>
+    <EventData>
+      <Data Name="RuleName">-</Data>
+      <Data Name="UtcTime">2026-10-02 09:11:03.772</Data>
+      <Data Name="ProcessGuid">{44444444-4444-4444-4444-444444444444}</Data>
+      <Data Name="ProcessId">3131</Data>
+      <Data Name="Image">C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE</Data>
+      <Data Name="FileVersion">16.0.1</Data>
+      <Data Name="Description">Microsoft Word</Data>
+      <Data Name="Product">Microsoft Office</Data>
+      <Data Name="Company">Microsoft Corporation</Data>
+      <Data Name="OriginalFileName">WINWORD.EXE</Data>
+      <Data Name="CommandLine">"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE" C:\Users\m.alvarez\Downloads\invoice.doc</Data>
+      <Data Name="CurrentDirectory">C:\Users\m.alvarez\Downloads\</Data>
+      <Data Name="User">FIN-014\m.alvarez</Data>
+      <Data Name="LogonGuid">{22222222-2222-2222-2222-222222222222}</Data>
+      <Data Name="LogonId">0x3e7</Data>
+      <Data Name="TerminalSessionId">1</Data>
+      <Data Name="IntegrityLevel">Medium</Data>
+      <Data Name="Hashes">SHA256=DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD,MD5=EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE,IMPHASH=FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</Data>
+      <Data Name="ParentProcessGuid">{11111111-1111-1111-1111-111111111111}</Data>
+      <Data Name="ParentProcessId">2048</Data>
+      <Data Name="ParentImage">C:\Windows\explorer.exe</Data>
+      <Data Name="ParentCommandLine">C:\Windows\explorer.exe</Data>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-Sysmon" Guid="5770385f-c22a-43e0-bf4c-06f5698ffbd9"/>
+      <EventID>1</EventID>
+      <TimeCreated SystemTime="2026-10-02T09:12:41.1234567Z"/>
+      <EventRecordID>104</EventRecordID>
+      <Channel>Microsoft-Windows-Sysmon/Operational</Channel>
+      <Computer>WS-FIN-014</Computer>
+    </System>
+    <EventData>
+      <Data Name="RuleName">-</Data>
+      <Data Name="UtcTime">2026-10-02 09:12:41.123</Data>
+      <Data Name="ProcessGuid">{55555555-5555-5555-5555-555555555555}</Data>
+      <Data Name="ProcessId">7422</Data>
+      <Data Name="Image">C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Data>
+      <Data Name="FileVersion">10.0.19041.1</Data>
+      <Data Name="Description">Windows PowerShell</Data>
+      <Data Name="Product">Microsoft Windows</Data>
+      <Data Name="Company">Microsoft Corporation</Data>
+      <Data Name="OriginalFileName">PowerShell.EXE</Data>
+      <Data Name="CommandLine">powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand aQBmACgAWwBJAG8ALgBGAFkAcwBpAG8AbgBdADoA</Data>
+      <Data Name="CurrentDirectory">C:\Users\m.alvarez\Downloads\</Data>
+      <Data Name="User">FIN-014\m.alvarez</Data>
+      <Data Name="LogonGuid">{22222222-2222-2222-2222-222222222222}</Data>
+      <Data Name="LogonId">0x3e7</Data>
+      <Data Name="TerminalSessionId">1</Data>
+      <Data Name="IntegrityLevel">Medium</Data>
+      <Data Name="Hashes">SHA256=1111111111111111111111111111111111111111111111111111111111111111,MD5=22222222222222222222222222222222,IMPHASH=33333333333333333333333333333333</Data>
+      <Data Name="ParentProcessGuid">{44444444-4444-4444-4444-444444444444}</Data>
+      <Data Name="ParentProcessId">3131</Data>
+      <Data Name="ParentImage">C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE</Data>
+      <Data Name="ParentCommandLine">"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE" C:\Users\m.alvarez\Downloads\invoice.doc</Data>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-Sysmon" Guid="5770385f-c22a-43e0-bf4c-06f5698ffbd9"/>
+      <EventID>3</EventID>
+      <TimeCreated SystemTime="2026-10-02T09:13:02.0090000Z"/>
+      <EventRecordID>105</EventRecordID>
+      <Channel>Microsoft-Windows-Sysmon/Operational</Channel>
+      <Computer>WS-FIN-014</Computer>
+    </System>
+    <EventData>
+      <Data Name="RuleName">-</Data>
+      <Data Name="UtcTime">2026-10-02 09:13:02.009</Data>
+      <Data Name="ProcessGuid">{55555555-5555-5555-5555-555555555555}</Data>
+      <Data Name="ProcessId">7422</Data>
+      <Data Name="Image">C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Data>
+      <Data Name="User">FIN-014\m.alvarez</Data>
+      <Data Name="Protocol">tcp</Data>
+      <Data Name="Initiated">true</Data>
+      <Data Name="SourceIsIpv6">false</Data>
+      <Data Name="SourceIp">192.168.1.50</Data>
+      <Data Name="SourceHostname">WS-FIN-014.corp.example</Data>
+      <Data Name="SourcePort">52310</Data>
+      <Data Name="SourcePortName">-</Data>
+      <Data Name="DestinationIsIpv6">false</Data>
+      <Data Name="DestinationIp">203.0.113.44</Data>
+      <Data Name="DestinationHostname">-</Data>
+      <Data Name="DestinationPort">443</Data>
+      <Data Name="DestinationPortName">https</Data>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-Sysmon" Guid="5770385f-c22a-43e0-bf4c-06f5698ffbd9"/>
+      <EventID>11</EventID>
+      <TimeCreated SystemTime="2026-10-02T09:13:20.8810000Z"/>
+      <EventRecordID>106</EventRecordID>
+      <Channel>Microsoft-Windows-Sysmon/Operational</Channel>
+      <Computer>WS-FIN-014</Computer>
+    </System>
+    <EventData>
+      <Data Name="RuleName">-</Data>
+      <Data Name="UtcTime">2026-10-02 09:13:20.881</Data>
+      <Data Name="ProcessGuid">{55555555-5555-5555-5555-555555555555}</Data>
+      <Data Name="ProcessId">7422</Data>
+      <Data Name="Image">C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Data>
+      <Data Name="TargetFilename">C:\Users\m.alvarez\AppData\Local\Temp\svchost.exe</Data>
+      <Data Name="CreationUtcTime">2026-10-02 09:13:20.881</Data>
+      <Data Name="User">FIN-014\m.alvarez</Data>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-Sysmon" Guid="5770385f-c22a-43e0-bf4c-06f5698ffbd9"/>
+      <EventID>13</EventID>
+      <TimeCreated SystemTime="2026-10-02T09:14:55.2070000Z"/>
+      <EventRecordID>107</EventRecordID>
+      <Channel>Microsoft-Windows-Sysmon/Operational</Channel>
+      <Computer>WS-FIN-014</Computer>
+    </System>
+    <EventData>
+      <Data Name="RuleName">-</Data>
+      <Data Name="EventType">SetValue</Data>
+      <Data Name="UtcTime">2026-10-02 09:14:55.207</Data>
+      <Data Name="ProcessGuid">{66666666-6666-6666-6666-666666666666}</Data>
+      <Data Name="ProcessId">8110</Data>
+      <Data Name="Image">C:\Users\m.alvarez\AppData\Local\Temp\svchost.exe</Data>
+      <Data Name="TargetObject">HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Updater</Data>
+      <Data Name="Details">"C:\Users\m.alvarez\AppData\Local\Temp\svchost.exe" /silent</Data>
+      <Data Name="User">FIN-014\m.alvarez</Data>
+    </EventData>
+  </Event>
+</Events>

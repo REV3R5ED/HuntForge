@@ -1,0 +1,26 @@
+<Events>
+  <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+    <System>
+      <Provider Name="Application Error" Guid="a0eebc05-9c0e-4fb2-a60b-f87d783aa75f"/>
+      <EventID>1000</EventID>
+      <Version>0</Version>
+      <Level>2</Level>
+      <Task>100</Task>
+      <Opcode>0</Opcode>
+      <Keywords>0x80000000000000</Keywords>
+      <TimeCreated SystemTime="2026-10-02T07:33:12.0000000Z"/>
+      <EventRecordID>701</EventRecordID>
+      <Channel>Application</Channel>
+      <Computer>WS-FIN-014</Computer>
+      <Security/>
+    </System>
+    <EventData>
+      <Data>notepad.exe</Data>
+      <Data>11.2302.16.0</Data>
+      <Data>6409d7d5</Data>
+      <Data>unknown</Data>
+      <Data>0.0.0.0</Data>
+      <Data>00000000</Data>
+    </EventData>
+  </Event>
+</Events>
