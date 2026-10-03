@@ -66,8 +66,8 @@ def by_event_id(events: list[NormalizedEvent]) -> dict[str, list[NormalizedEvent
 
 
 class TestPackaging:
-    def test_version_is_0_6(self) -> None:
-        assert __version__ == "0.6.0"
+    def test_version_is_0_7(self) -> None:
+        assert __version__ == "0.7.0"
 
     def test_source_kinds(self) -> None:
         assert set(SOURCE_KINDS) == {
