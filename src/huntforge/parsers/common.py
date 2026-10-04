@@ -28,6 +28,24 @@ MAX_PARSE_BYTES = 100 * 1024 * 1024
 #: Cap on warnings per parsed file (malformed input must not flood output).
 MAX_WARNINGS_PER_FILE = 25
 
+
+def check_parse_size(path: Path) -> str | None:
+    """DoS guard: warn when *path* exceeds ``MAX_PARSE_BYTES``.
+
+    Returns the warning text (the caller skips parsing) or ``None``
+    when the file is within limits. ``parse_file`` enforces this for
+    every parser; direct hive reads (``huntforge registry``) check it
+    separately.
+    """
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None
+    if size > MAX_PARSE_BYTES:
+        return f"{path.name}: exceeds {MAX_PARSE_BYTES} byte parse limit"
+    return None
+
+
 #: "-EncodedCommand", "-enc", "/enc" (word-boundary aware, case-insensitive).
 _ENCODED_RE = re.compile(
     r"(?:^|\s)(?:-|/)(?:encodedcommand|enc|e)(?:\s|$|=|:)", re.IGNORECASE

@@ -41,7 +41,7 @@ from huntforge.parsers import prefetch as prefetch_mod
 from huntforge.parsers import registry as registry_mod
 from huntforge.parsers import security as security_mod
 from huntforge.parsers import sysmon as sysmon_mod
-from huntforge.parsers.common import DETECT_HEAD_BYTES, EVTX_MAGIC
+from huntforge.parsers.common import DETECT_HEAD_BYTES, EVTX_MAGIC, check_parse_size
 
 PARSER_VERSION = "0.3.0"
 
@@ -165,6 +165,13 @@ def parse_file(
     if kind not in SOURCE_KINDS:
         raise ValueError(
             f"unknown source kind {kind!r}; expected one of {SOURCE_KINDS}"
+        )
+    oversize = check_parse_size(path)
+    if oversize:
+        # Uniform DoS guard for every parser: registered as evidence with
+        # a warning, never parsed (ingest turns this into a warning).
+        return ParserResult(
+            source_kind=kind, events=[], warnings=[oversize], records_seen=0
         )
     suffix = path.suffix.lower()
     is_json = suffix == ".json" or _looks_like_json(path)

@@ -80,7 +80,7 @@ def test_unobservable_techniques_documented_as_gaps() -> None:
 
 def test_plugin_registered() -> None:
     info = plugins_mod.get_registry().get("mitre")
-    assert info.version == "0.8.0"
+    assert info.version == "0.9.0"
     assert "mitre" in info.commands
 
 
