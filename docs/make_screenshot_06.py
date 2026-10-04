@@ -24,7 +24,10 @@ FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
 # Genuine v0.6 output (HUNTFORGE_STATE_DIR=/tmp/hf06docs).
 LINES: list[tuple[str, str]] = [
     ("prompt", "huntforge mitre --case CASE-006"),
-    ("out", "technique coverage: 5 of 23 techniques have findings (7 stored finding(s))"),
+    (
+        "out",
+        "technique coverage: 5 of 23 techniques have findings (7 stored finding(s))",
+    ),
     (
         "out",
         "  T1059.001 PowerShell [Execution]",
@@ -55,11 +58,13 @@ LINES: list[tuple[str, str]] = [
     ("out", "1 finding(s) from sigma rule hf-sigma-0001"),
     (
         "out",
-        "  [HF-0008] HIGH hf-sigma-0001 -- Encoded PowerShell Command Line (confidence 70)",
+        "  [HF-0008] HIGH hf-sigma-0001 -- Encoded PowerShell Command Line "
+        "(confidence 70)",
     ),
     (
         "out",
-        "  why: selection 'selection' matched (command_line matches '*-EncodedCommand*')",
+        "  why: selection 'selection' matched "
+        "(command_line matches '*-EncodedCommand*')",
     ),
 ]
 
