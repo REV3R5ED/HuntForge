@@ -22,15 +22,21 @@ formula-safe CSV findings export, analyst notes stored in the case,
 and chain-of-custody appendices. The executive summary is
 machine-generated and marked as requiring analyst review; observed
 facts and inferences stay labeled.
+
+v0.9 adds batch triage (one case per evidence file, resumable via a
+manifest), JSONL export for SIEM ingestion, an analyst config file
+(``~/.huntforge/config.toml``), and a hardening pass: input size caps
+are documented and corrupt inputs never abort a run.
 """
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 __author__ = "Pouya Shini Karim"
 
-from huntforge.core import config, logging, plugins, results
+from huntforge.core import appconfig, config, logging, plugins, results
 
 __all__ = [
     "__version__",
+    "appconfig",
     "config",
     "logging",
     "plugins",

@@ -14,7 +14,7 @@ default, every detection is explainable with preserved evidence, humans
 make the final judgment, and observed facts are always distinguished
 from inference.
 
-## v0.8 — what works today
+## v0.9 — what works today
 
 - **Core CLI** (`huntforge`): `case create/show/list`, `ingest`,
   `events`, `registry`, `timeline`, `lineage`, `entities`, `detect`,
@@ -135,6 +135,20 @@ from inference.
   - Analyst notes are free text stored in the case DB, rendered
     verbatim under a clearly-marked section. HuntForge never writes
     notes itself. Both `report` and `notes` are audit-logged.
+- **Batch triage** (`huntforge batch <dir> --output DIR`): one case per
+  evidence file — auto-detected parsing, the detection catalog, a
+  `batch-summary.json` (per-case counts, severity totals, top ATT&CK
+  techniques) and a `batch-manifest.json` that makes re-runs skip
+  already-processed files. Corrupt files are recorded, never fatal.
+- **JSONL export** (`huntforge export --case ID [--what events|findings]
+  -o FILE`): deterministic, self-describing JSONL for SIEM ingestion
+  (see [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)). Without `-o` the
+  data goes to stdout and the envelope moves to stderr — pipe-safe.
+- **Analyst config** (`~/.huntforge/config.toml`, `--config PATH`):
+  `state_dir`, `default_severity`, `analyst_name`. State-dir
+  precedence: `--state-dir` > `HUNTFORGE_STATE_DIR` > config >
+  `~/.huntforge`. See
+  [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md#config-file).
 
 ## Quick start
 
@@ -152,6 +166,8 @@ huntforge entities --case CASE-001 --type ip
 huntforge audit --case CASE-001
 huntforge notes --case CASE-001 --add "Triage: invoice lure, escalating"
 huntforge report case CASE-001 --output ./report-case-001
+huntforge batch ./evidence-drop --output ./batch-out   # one case per file
+huntforge export --case CASE-001 --what findings -o findings.jsonl
 ```
 
 See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
@@ -166,10 +182,10 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - [x] **v0.6** — MITRE ATT&CK mapping, Sigma-compatible rule ingestion
 - [x] **v0.7** — Correlation engine, attack narratives (linkages labeled INFERRED)
 - [x] **v0.8** — Case reporting (HTML/JSON/Markdown/CSV), analyst notes, chain of custody
-- [ ] **v0.9** — Analyst UI + ecosystem integrations (SentinelKit, LogLens, AegisForge)
+- [x] **v0.9** — Batch triage, JSONL export for SIEM, analyst config file, hardening pass
 - [ ] **v1.0** — Stable schemas, release docs, benchmark/demo corpus, hardened plugin API
 
-## Limitations (v0.8)
+## Limitations (v0.9)
 
 - **Binary `.evtx` is not parsed**: the adapter detects it by magic
   bytes and prints the exact `wevtutil qe … /f:xml` command to export
@@ -210,6 +226,15 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
   and `near` are rejected at load time, never silently mis-evaluated.
 - Single-user local tool: the SQLite store has no access control;
   keep case directories on trusted storage.
+- **Batch is triage, not review**: one case per file is a starting
+  point — each case still needs analyst review. The manifest is keyed
+  by SHA-256, so renaming a file re-processes it (same bytes, new
+  record) and edited files are re-processed as new evidence.
+- **Config on Python 3.10**: only top-level `key = "value"` pairs are
+  read (stdlib `tomllib` needs 3.11+); anything fancier is an explicit
+  error, never a silent misread.
+- JSONL export streams from SQLite in row-id order; large cases are
+  fine, but the export is a snapshot — re-export after new ingests.
 - Python 3.10–3.13, stdlib only (no third-party runtime dependencies).
 
 ## Development

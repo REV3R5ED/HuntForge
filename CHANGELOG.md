@@ -3,6 +3,49 @@
 All notable changes to HuntForge are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] - 2026-10-03
+
+### Added
+- Batch triage (`huntforge.batch`, stdlib-only, registered in the
+  plugin registry as `batch` v0.9.0):
+  - `huntforge batch <dir> --output DIR [--severity X]`: walks the
+    input directory (sorted, recursive, hidden paths skipped), creates
+    one case per evidence file (deterministic names like
+    `batch-0003-sysmon_intrusion`), ingests with the v0.2
+    auto-detection, runs the detection catalog, and writes
+    `batch-summary.json` + `batch-manifest.json` to the output dir.
+  - Re-runs skip files whose SHA-256 already appears in the manifest
+    (status `skipped`) — idempotent, resumable-ish. Corrupt or
+    oversized files never abort the run: they are recorded in
+    `files_failed` and the batch continues.
+  - The summary reports per-case event/finding counts, severity
+    totals, and top ATT&CK techniques across the batch (computed from
+    stored findings only — never from rule metadata).
+- JSONL export for SIEM ingestion (`huntforge export --case ID
+  [--what events|findings] [--format jsonl] [-o FILE]`): streams one
+  self-describing JSON object per line (`record_type`, `schema`,
+  `tool`, `version`, `record`), deterministically ordered. Without
+  `-o` the JSONL goes to stdout and the result envelope moves to
+  stderr (pipe-safe); `--json` requires `-o`.
+- Analyst config file (`huntforge.core.appconfig`): `~/.huntforge/config.toml`
+  (or `--config PATH`), with `state_dir`, `default_severity`, and
+  `analyst_name` keys. Python 3.11+ uses `tomllib`; 3.10 falls back to
+  a tiny TOML-subset reader (top-level `key = "value"` only, anything
+  fancier is an explicit error, never a silent misread). Unknown keys
+  warn; invalid values fail with file and line. State-dir precedence:
+  `--state-dir` > `HUNTFORGE_STATE_DIR` > config > `~/.huntforge`.
+  `detect` picks up `default_severity`; `notes --add` picks up
+  `analyst_name` (new `--author` flag overrides both).
+- Hardening pass: input caps audited and documented in
+  `docs/INTEGRATIONS.md` — 10,000 files / 10 GiB per batch, 100 MiB
+  per parsed file, 1 MiB per JSONL fixture line, 25 warnings per file;
+  batch is timed in CI against the full fixture corpus.
+- `docs/INTEGRATIONS.md`: the integration surface — JSONL schemas,
+  exit codes, `--json` envelope contract, manifest/summary formats,
+  input caps, and the config file reference.
+- `docs/USAGE.md`: v0.9 scenario — batch-triaging a directory of
+  evidence — with a genuine terminal screenshot.
+
 ## [0.8.0] - 2026-10-03
 
 ### Added

@@ -3,6 +3,99 @@
 Scenario-driven walkthroughs for HuntForge. All output below is
 genuine — produced by running the commands against synthetic evidence.
 
+## Scenario (v0.9): batch-triaging a directory of evidence
+
+Monday morning: an `./evidence-drop` directory with four files lands
+on the analyst's desk. Instead of creating four cases by hand, one
+command triages the whole directory — one case per file, detections
+run everywhere, a summary and a manifest for the record:
+
+```console
+$ huntforge batch ./evidence-drop --output ./batch-out
+4 case(s) from 4 file(s), 14 event(s), 6 finding(s): 5 high, 1 medium
+  input: ./evidence-drop
+  output: ./batch-out
+  files: 4 found, 4 case(s) created, 0 skipped
+  events: 14, findings: 6
+  by severity: 5 high, 1 medium
+  top techniques:
+    T1059.001 PowerShell (2 finding(s))
+    T1204.002 Malicious File (2 finding(s))
+    T1105 Ingress Tool Transfer (1 finding(s))
+  summary: ./batch-out/batch-summary.json
+  manifest: ./batch-out/batch-manifest.json
+```
+
+Case names are deterministic (`batch-0001-malformed`,
+`batch-0002-powershell_events`, …), each file is ingested with source
+auto-detection, and every processed case gets its own `batch` audit
+record. A second run is a no-op for files already processed — the
+manifest keys on SHA-256, so only genuinely new evidence creates new
+cases:
+
+```console
+$ huntforge batch ./evidence-drop --output ./batch-out
+0 case(s) from 4 file(s), 14 event(s), 6 finding(s): 5 high, 1 medium; 4 skipped (manifest)
+```
+
+### Exporting to the SIEM
+
+One case deserves a closer look in the SIEM. `export` streams it as
+self-describing JSONL — one object per line, deterministic order:
+
+```console
+$ huntforge export --case batch-0004-sysmon_intrusion --what findings -o sysmon-findings.jsonl
+exported 3 findings record(s) as jsonl
+  case: batch-0004-sysmon_intrusion
+  what: findings (jsonl)
+  lines: 3
+  output: ./sysmon-findings.jsonl
+  sha256: d267cbbd4b17bb585a7589a53ded5b798f74a3a6bdf653159c21654aa4209867
+```
+
+Each line carries `record_type`, `schema` (`huntforge/finding@0.9`),
+`tool`, `version`, and the record itself — parseable without sidecar
+metadata. Omit `-o` and the JSONL goes to stdout (the result envelope
+moves to stderr), so `huntforge export --case X --what events |
+jq …` works in a pipeline.
+
+### The analyst config file
+
+The analyst keeps `~/.huntforge/config.toml`:
+
+```toml
+state_dir = "/srv/huntforge/state"
+default_severity = "high"
+analyst_name = "Pouya"
+```
+
+Now `detect` filters to high-and-up without a flag, and
+`notes --add` signs as Pouya. State-dir precedence stays explicit:
+`--state-dir` > `HUNTFORGE_STATE_DIR` > config > `~/.huntforge`.
+
+```console
+$ huntforge detect --case batch-0004-sysmon_intrusion
+2 finding(s): 2 high
+  [HF-0004] HIGH HF-DET-ENCPSH — Encoded PowerShell execution (confidence 80)
+    why: parser observation 'encoded-command' on event #4 (not a verdict — see rule docs)
+    ...
+```
+
+![Batch triage and JSONL export](images/09-batch.png)
+
+### Honest limitations (v0.9)
+
+- Batch is triage, not review: every case it creates still needs an
+  analyst. The manifest keys on SHA-256 — renaming a file
+  re-processes it; editing a file re-processes it as new evidence.
+- JSONL export is a snapshot: new ingests need a re-export.
+- On Python 3.10 the config reader accepts only top-level
+  `key = "value"` pairs (stdlib `tomllib` needs 3.11+); anything
+  fancier is an explicit error, never a silent misread.
+- Input caps are hard: 10,000 files / 10 GiB per batch, 100 MiB per
+  parsed file, 1 MiB per JSONL fixture line. See
+  [docs/INTEGRATIONS.md](INTEGRATIONS.md) for the full table.
+
 ## Scenario (v0.8): reporting the intrusion case
 
 The same invoice-lure chain (doc → PowerShell `-enc` → outbound
