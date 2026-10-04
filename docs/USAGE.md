@@ -3,6 +3,24 @@
 Scenario-driven walkthroughs for HuntForge. All output below is
 genuine — produced by running the commands against synthetic evidence.
 
+## Index
+
+| Scenario | What it covers |
+|----------|----------------|
+| [v0.9](#scenario-v09-batch-triaging-a-directory-of-evidence) | batch-triaging a directory of evidence, SIEM export, config file |
+| [v0.8](#scenario-v08-reporting-the-intrusion-case) | analyst notes, case reports, chain of custody |
+| [v0.7](#scenario-v07-correlating-the-intrusion-chain-into-one-narrative) | correlation engine, attack narrative |
+| [v0.6](#scenario-v06-attck-mapping-and-sigma-rules) | ATT&CK coverage, Sigma-subset rules |
+| [v0.5](#scenario-v05-explainable-detections) | detection catalog, explaining a finding |
+| [v0.4](#scenario-v04-reconstruct-the-intrusion) | unified timeline, process lineage, entities |
+| [v0.3](#scenario-v03-persistence-artifacts) | prefetch, registry, tasks, services |
+| [v0.2](#scenario-v02-from-log-export-to-process-lineage) | Sysmon/Security/PowerShell ingest |
+| [v0.1](#scenario-v01-a-compromised-workstation) | core CLI, event model, provenance |
+
+For the frozen JSON contracts behind every command, see
+[SCHEMAS.md](SCHEMAS.md); for the v1.x stability promise, see
+[CLI-STABILITY.md](CLI-STABILITY.md).
+
 ## Scenario (v0.9): batch-triaging a directory of evidence
 
 Monday morning: an `./evidence-drop` directory with four files lands

@@ -16,10 +16,8 @@ import json
 from typing import Any, TextIO
 
 from huntforge import __version__
+from huntforge.schemas import SCHEMA_EVENT, SCHEMA_FINDING
 from huntforge.store.db import CaseDB
-
-SCHEMA_EVENT = "huntforge/event@0.9"
-SCHEMA_FINDING = "huntforge/finding@0.9"
 
 
 def _envelope(record_type: str, schema: str, record: dict[str, Any]) -> str:

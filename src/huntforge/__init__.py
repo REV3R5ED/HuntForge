@@ -27,9 +27,14 @@ v0.9 adds batch triage (one case per evidence file, resumable via a
 manifest), JSONL export for SIEM ingestion, an analyst config file
 (``~/.huntforge/config.toml``), and a hardening pass: input size caps
 are documented and corrupt inputs never abort a run.
+
+v1.0 freezes the contracts: stable JSON schemas
+(``huntforge.schema`` / ``docs/SCHEMAS.md``), a CLI stability promise
+(``docs/CLI-STABILITY.md``), and a schema-conformance test suite that
+fails the build on drift. No new features.
 """
 
-__version__ = "0.9.0"
+__version__ = "1.0.0"
 __author__ = "Pouya Shini Karim"
 
 from huntforge.core import appconfig, config, logging, plugins, results
