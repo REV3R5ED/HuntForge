@@ -480,22 +480,29 @@ class CaseDB:
             query += " WHERE " + " AND ".join(clauses)
         query += " ORDER BY id ASC"
         rows = self._conn.execute(query, params).fetchall()
-        return [
-            {
-                "finding_uid": r["finding_uid"],
-                "rule_id": r["rule_id"],
-                "rule_version": r["rule_version"],
-                "severity": r["severity"],
-                "title": r["title"],
-                "confidence": int(r["confidence"]),
-                "created_at": r["created_at"],
-                "evidence": json.loads(r["evidence_json"] or "[]"),
-                "explanation": json.loads(r["explanation_json"] or "{}"),
-                "mitre": json.loads(r["mitre_json"] or "[]"),
-                "provenance": r["provenance"] or "huntforge.detections",
-            }
-            for r in rows
-        ]
+        out = []
+        for r in rows:
+            explanation = json.loads(r["explanation_json"] or "{}")
+            out.append(
+                {
+                    "finding_uid": r["finding_uid"],
+                    "rule_id": r["rule_id"],
+                    "rule_version": r["rule_version"],
+                    "severity": r["severity"],
+                    "title": r["title"],
+                    "confidence": int(r["confidence"]),
+                    "confidence_reason": explanation.get("confidence_reason", ""),
+                    "why": list(explanation.get("why") or []),
+                    "what": explanation.get("what", ""),
+                    "evidence": json.loads(r["evidence_json"] or "[]"),
+                    "observed": list(explanation.get("observed") or []),
+                    "inferred": list(explanation.get("inferred") or []),
+                    "mitre": json.loads(r["mitre_json"] or "[]"),
+                    "provenance": r["provenance"] or "huntforge.detections",
+                    "created_at": r["created_at"],
+                }
+            )
+        return out
 
     # -- notes ------------------------------------------------------------
     def add_note(self, text: str, author: str = "analyst") -> int:

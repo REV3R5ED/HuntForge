@@ -24,8 +24,6 @@ import io
 import json
 from typing import Any
 
-REPORT_SCHEMA_VERSION = "0.8.0"
-
 
 def render_json(report: dict[str, Any]) -> str:
     """Pretty-printed JSON of the report dict."""

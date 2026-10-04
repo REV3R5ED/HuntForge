@@ -289,7 +289,7 @@ def test_export_events_jsonl_valid(isolated_state: Path, tmp_path: Path) -> None
     for line in lines:
         obj = json.loads(line)  # every line parses
         assert obj["record_type"] == "event"
-        assert obj["schema"] == "huntforge/event@0.9"
+        assert obj["schema"] == "huntforge/event@1.0"
         assert obj["tool"] == "huntforge"
         assert isinstance(obj["record"]["id"], int)
 
@@ -307,7 +307,7 @@ def test_export_findings_jsonl_valid(isolated_state: Path, tmp_path: Path) -> No
     for line in lines:
         obj = json.loads(line)
         assert obj["record_type"] == "finding"
-        assert obj["schema"] == "huntforge/finding@0.9"
+        assert obj["schema"] == "huntforge/finding@1.0"
 
 
 def test_export_what_rejects_unknown() -> None:
@@ -347,7 +347,7 @@ def test_batch_plugin_registered() -> None:
     from huntforge.core import plugins as plugins_mod
 
     info = plugins_mod.get_registry().get("batch")
-    assert info.version == "0.9.0"
+    assert info.version == "1.0.0"
     assert set(info.commands) == {"batch", "export"}
 
 
