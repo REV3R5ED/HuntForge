@@ -23,7 +23,7 @@ from huntforge.reporting import notes as notes_mod
 from huntforge.reporting import render as render_mod
 from huntforge.reporting import report as report_mod
 
-REPORTING_VERSION = "0.8.0"
+REPORTING_VERSION = "1.0.0"
 
 
 def ensure_registered() -> None:

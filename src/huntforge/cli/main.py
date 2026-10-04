@@ -20,6 +20,11 @@ v0.9 adds batch triage (``batch``: one case per evidence file,
 resumable via manifest), JSONL export for SIEM ingestion
 (``export``), and an analyst config file (``--config`` /
 ``~/.huntforge/config.toml``).
+
+v1.0 freezes the contracts: ``huntforge schema`` prints the stable
+JSON schema documents (``docs/SCHEMAS.md``), the CLI surface is
+frozen per ``docs/CLI-STABILITY.md``, and ``tests/test_schemas.py``
+validates every command's ``--json`` output against the schemas.
 """
 
 from __future__ import annotations
@@ -36,6 +41,7 @@ from huntforge import batch as batch_mod
 from huntforge import correlate as correlate_mod
 from huntforge import mitre as mitre_mod
 from huntforge import reporting as reporting_mod
+from huntforge import schemas as schemas_mod
 from huntforge import sigma as sigma_mod
 from huntforge.cases.service import CaseService
 from huntforge.core import appconfig as appconfig_mod
@@ -90,6 +96,7 @@ plugins_mod.register(
             "notes",
             "batch",
             "export",
+            "schema",
         ],
     )
 )
@@ -97,6 +104,40 @@ plugins_mod.register(
 
 def _print_json(result: Result) -> None:
     print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+
+
+def cmd_schema(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | None]:
+    del state_dir  # schemas need no case
+    result = Result(command="schema")
+    if args.name is None:
+        catalog = [
+            {"name": name, "$id": schemas_mod.get(name)["$id"]}
+            for name in schemas_mod.names()
+        ]
+        result.data = {"schemas": catalog, "count": len(catalog)}
+        result.summary = f"{len(catalog)} stable schema(s) (v1.x)"
+        return result, None
+    try:
+        doc = schemas_mod.get(args.name)
+    except KeyError:
+        result.fail(
+            f"unknown schema {args.name!r} "
+            f"(available: {', '.join(schemas_mod.names())})"
+        )
+        return result, None
+    result.data = {"name": args.name, "schema": doc}
+    result.summary = f"schema {args.name}: {doc['$id']}"
+    return result, None
+
+
+def _human_schema(data: dict[str, Any]) -> None:
+    if "schemas" in data:
+        for entry in data["schemas"]:
+            print(f"  {entry['name']}: {entry['$id']}")
+    elif "schema" in data:
+        print(f"  $id: {data['schema']['$id']}")
+        print(f"  title: {data['schema'].get('title', '')}")
+        print(f"  {data['schema'].get('description', '')[:200]}")
 
 
 def _human_kv(title: str, mapping: dict[str, Any]) -> None:
@@ -392,6 +433,16 @@ def build_parser() -> argparse.ArgumentParser:
         "-o",
         default=None,
         help="Output file (default: stdout; the result envelope then goes to stderr)",
+    )
+
+    schema_p = sub.add_parser(
+        "schema", help="Print stable JSON schema documents (offline)"
+    )
+    schema_p.add_argument(
+        "name",
+        nargs="?",
+        default=None,
+        help="Schema name (default: list all schema names and $ids)",
     )
 
     return parser
@@ -1504,6 +1555,9 @@ def render(
     if result.command == "export" and result.data:
         _human_export(result.data)
         return
+    if result.command == "schema" and result.data:
+        _human_schema(result.data)
+        return
     if result.data:
         for key, value in result.data.items():
             if key in ("evidence", "cases", "entries", "evidence_files"):
@@ -1581,6 +1635,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "notes": cmd_notes,
         "batch": cmd_batch,
         "export": cmd_export,
+        "schema": cmd_schema,
     }
     handler = handlers.get(args.command)
     if handler is None:  # pragma: no cover - argparse guards this

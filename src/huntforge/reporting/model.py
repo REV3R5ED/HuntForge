@@ -28,11 +28,12 @@ from huntforge import correlate as correlate_mod
 from huntforge import mitre as mitre_mod
 from huntforge import timeline as timeline_mod
 from huntforge.core.logging import utc_now_iso
+from huntforge.schemas import SCHEMA_REPORT
 from huntforge.store.db import CaseDB
 from huntforge.timeline.timeline import TimelineOptions, build_timeline
 
-REPORT_SCHEMA_VERSION = "0.8.0"
-REPORTING_VERSION = "0.8.0"
+REPORT_SCHEMA_VERSION = SCHEMA_REPORT
+REPORTING_VERSION = "1.0.0"
 
 # Sections every report must contain (assembly-completeness gate).
 REQUIRED_SECTIONS = (
@@ -80,7 +81,6 @@ LIMITATIONS = [
 
 def _finding_to_report(finding: dict[str, Any]) -> dict[str, Any]:
     """Render one stored finding with explicit OBSERVED/INFERRED labels."""
-    explanation = finding.get("explanation") or {}
     return {
         "finding_uid": finding.get("finding_uid"),
         "rule_id": finding.get("rule_id"),
@@ -89,15 +89,15 @@ def _finding_to_report(finding: dict[str, Any]) -> dict[str, Any]:
         "title": finding.get("title"),
         "confidence": finding.get("confidence"),
         "confidence_reason": finding.get("confidence_reason", ""),
-        "why": list(explanation.get("why") or []),
-        "what": explanation.get("what", ""),
+        "why": list(finding.get("why") or []),
+        "what": finding.get("what", ""),
         "observed": {
             "label": "OBSERVED",
-            "facts": list(explanation.get("observed") or []),
+            "facts": list(finding.get("observed") or []),
         },
         "inferred": {
             "label": "INFERRED",
-            "hypotheses": list(explanation.get("inferred") or []),
+            "hypotheses": list(finding.get("inferred") or []),
         },
         "evidence": list(finding.get("evidence") or []),
         "mitre": list(finding.get("mitre") or []),
