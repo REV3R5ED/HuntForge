@@ -28,6 +28,7 @@ from typing import Any
 from huntforge import __version__
 from huntforge import correlate as correlate_mod
 from huntforge import mitre as mitre_mod
+from huntforge import reporting as reporting_mod
 from huntforge import sigma as sigma_mod
 from huntforge.cases.service import CaseService
 from huntforge.core import config as config_mod
@@ -75,6 +76,8 @@ plugins_mod.register(
             "sigma",
             "correlate",
             "narrative",
+            "report",
+            "notes",
         ],
     )
 )
@@ -308,6 +311,29 @@ def build_parser() -> argparse.ArgumentParser:
     narrative_p.add_argument("--case", required=True, help="Case identifier")
     narrative_p.add_argument(
         "--cluster", required=True, type=int, help="Cluster id from 'correlate'"
+    )
+
+    report_p = sub.add_parser("report", help="Generate case reports")
+    report_sub = report_p.add_subparsers(dest="report_command")
+    report_case_p = report_sub.add_parser("case", help="Report on a case")
+    report_case_p.add_argument("case", help="Case identifier")
+    report_case_p.add_argument(
+        "--output",
+        required=True,
+        help="Output directory for the report files (created if missing)",
+    )
+    report_case_p.add_argument(
+        "--format",
+        choices=["html", "json", "md", "all"],
+        default="all",
+        help="Report format (default: all)",
+    )
+
+    notes_p = sub.add_parser("notes", help="Analyst notes for a case")
+    notes_p.add_argument("--case", required=True, help="Case identifier")
+    notes_p.add_argument("--add", default=None, help="Add a note with this text")
+    notes_p.add_argument(
+        "--list", action="store_true", help="List notes (default if --add not given)"
     )
 
     return parser
@@ -871,6 +897,71 @@ def cmd_narrative(
     return result, args.case
 
 
+def cmd_report(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | None]:
+    result = Result(command="report case")
+    if args.report_command != "case":
+        result.fail("usage: huntforge report case CASE-ID --output DIR")
+        return result, None
+    service = CaseService(state_dir)
+    try:
+        db = service.open_db(args.case)
+    except CaseError as exc:
+        result.fail(str(exc))
+        return result, None
+    try:
+        output_dir = Path(args.output).expanduser()
+        formats = (
+            ("html", "json", "md", "csv") if args.format == "all" else (args.format,)
+        )
+        try:
+            manifest = reporting_mod.report_mod.generate(db, output_dir, formats)
+        except ValueError as exc:
+            result.fail(str(exc))
+            return result, args.case
+        result.data = manifest
+        result.summary = (
+            f"report for {args.case}: {len(manifest['files'])} file(s) in {output_dir}"
+        )
+    finally:
+        db.close()
+    return result, args.case
+
+
+def cmd_notes(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | None]:
+    result = Result(command="notes")
+    service = CaseService(state_dir)
+    try:
+        db = service.open_db(args.case)
+    except CaseError as exc:
+        result.fail(str(exc))
+        return result, None
+    try:
+        added: dict[str, Any] | None = None
+        if args.add is not None:
+            try:
+                added = reporting_mod.notes_mod.add_note(db, args.add)
+            except CaseError as exc:
+                result.fail(str(exc))
+                return result, args.case
+        show = bool(args.list) or args.add is None
+        notes = reporting_mod.notes_mod.list_notes(db) if show else []
+        result.data = {
+            "case": args.case,
+            "added": added,
+            "notes": notes,
+            "count": len(notes),
+        }
+        if added is not None and show:
+            result.summary = f"note #{added['id']} added; {len(notes)} note(s)"
+        elif added is not None:
+            result.summary = f"note #{added['id']} added"
+        else:
+            result.summary = f"{len(notes)} note(s)"
+    finally:
+        db.close()
+    return result, args.case
+
+
 def _human_detect(
     data: dict[str, Any], findings: list[dict[str, Any]], explain: bool
 ) -> None:
@@ -905,6 +996,26 @@ def _human_detect(
     missing = data.get("rules_without_data") or []
     if missing:
         print(f"  rules without telemetry: {', '.join(missing)}")
+
+
+def _human_report(data: dict[str, Any]) -> None:
+    for path in data.get("files") or []:
+        print(f"  wrote {path}")
+    meta = data.get("meta") or {}
+    print(f"  report schema {meta.get('report_schema_version')}")
+    print("  executive summary is generated — analyst review required")
+
+
+def _human_notes(data: dict[str, Any]) -> None:
+    added = data.get("added")
+    if added:
+        print(f"  added note #{added['id']}: {added['text']}")
+    notes = data.get("notes") or []
+    if notes:
+        for note in notes:
+            print(f"  [#{note['id']}] {note['ts']} ({note['author']}): {note['text']}")
+    elif added is None:
+        print("  no notes")
 
 
 def _human_rules(data: dict[str, Any]) -> None:
@@ -1158,6 +1269,12 @@ def render(
     if result.command == "narrative" and result.data:
         _human_narrative(result.data)
         return
+    if result.command == "report case" and result.data:
+        _human_report(result.data)
+        return
+    if result.command == "notes" and result.data:
+        _human_notes(result.data)
+        return
     if result.data:
         for key, value in result.data.items():
             if key in ("evidence", "cases", "entries", "evidence_files"):
@@ -1220,6 +1337,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "sigma": cmd_sigma,
         "correlate": cmd_correlate,
         "narrative": cmd_narrative,
+        "report": cmd_report,
+        "notes": cmd_notes,
     }
     handler = handlers.get(args.command)
     if handler is None:  # pragma: no cover - argparse guards this
