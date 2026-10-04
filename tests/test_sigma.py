@@ -286,7 +286,7 @@ def test_logsource_filter() -> None:
 
 def test_plugin_registered() -> None:
     info = plugins_mod.get_registry().get("sigma")
-    assert info.version == "0.9.0"
+    assert info.version == "1.0.0"
     assert "sigma" in info.commands
 
 

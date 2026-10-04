@@ -262,7 +262,7 @@ def test_render_json_roundtrip(case_db: CaseDB) -> None:
     report = build_report(case_db)
     parsed = json.loads(render_json(report))
     assert parsed["meta"]["case_id"] == "CASE-001"
-    assert parsed["meta"]["report_schema_version"] == "0.8.0"
+    assert parsed["meta"]["report_schema_version"] == "huntforge/report@1.0"
     assert parsed["meta"]["generated_at"]
     for section in REQUIRED_SECTIONS:
         assert section in parsed
@@ -436,5 +436,5 @@ def test_reporting_registered() -> None:
     from huntforge.core.plugins import get_registry
 
     info = get_registry().get("reporting")
-    assert info.version == "0.8.0"
+    assert info.version == "1.0.0"
     assert set(info.commands) == {"report", "notes"}
