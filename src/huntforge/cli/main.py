@@ -3,7 +3,8 @@
 ``huntforge timeline ...`` / ``huntforge lineage ...`` /
 ``huntforge entities ...`` / ``huntforge detect ...`` /
 ``huntforge rules ...`` / ``huntforge mitre ...`` / ``huntforge sigma ...`` /
-``huntforge correlate ...`` / ``huntforge narrative ...``.
+``huntforge correlate ...`` / ``huntforge narrative ...`` /
+``huntforge batch ...`` / ``huntforge export ...``.
 
 Every command returns a shared result envelope, renders human-readable
 text by default (``--json`` for automation), uses structured exit
@@ -14,6 +15,11 @@ only the requested output.
 v0.5 adds explainable detections: ``detect`` runs the rule catalog
 over a case's events and every finding cites its evidence; ``rules``
 lists the catalog. No verdicts are final — the analyst decides.
+
+v0.9 adds batch triage (``batch``: one case per evidence file,
+resumable via manifest), JSONL export for SIEM ingestion
+(``export``), and an analyst config file (``--config`` /
+``~/.huntforge/config.toml``).
 """
 
 from __future__ import annotations
@@ -26,13 +32,16 @@ from pathlib import Path
 from typing import Any
 
 from huntforge import __version__
+from huntforge import batch as batch_mod
 from huntforge import correlate as correlate_mod
 from huntforge import mitre as mitre_mod
 from huntforge import reporting as reporting_mod
 from huntforge import sigma as sigma_mod
 from huntforge.cases.service import CaseService
+from huntforge.core import appconfig as appconfig_mod
 from huntforge.core import config as config_mod
 from huntforge.core import plugins as plugins_mod
+from huntforge.core.appconfig import ConfigError
 from huntforge.core.results import (
     EXIT_ERROR,
     EXIT_OK,
@@ -49,6 +58,7 @@ from huntforge.detections import (
 from huntforge.events.query import EventQuery
 from huntforge.ingest.service import ingest_path, load_fixture
 from huntforge.parsers import SOURCE_KINDS
+from huntforge.parsers.common import check_parse_size
 from huntforge.parsers.registry import Hive, HiveError, KeyNotFoundError
 from huntforge.store.db import CaseDB, CaseError
 from huntforge.timeline import entities as entities_mod
@@ -78,6 +88,8 @@ plugins_mod.register(
             "narrative",
             "report",
             "notes",
+            "batch",
+            "export",
         ],
     )
 )
@@ -124,6 +136,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--state-dir",
         default=None,
         help="State directory override (default: ~/.huntforge or HUNTFORGE_STATE_DIR)",
+    )
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="Config file (TOML); default: ~/.huntforge/config.toml if present",
     )
     parser.add_argument(
         "--json",
@@ -333,7 +350,48 @@ def build_parser() -> argparse.ArgumentParser:
     notes_p.add_argument("--case", required=True, help="Case identifier")
     notes_p.add_argument("--add", default=None, help="Add a note with this text")
     notes_p.add_argument(
+        "--author",
+        default=None,
+        help="Note author (default: analyst_name from config, else 'analyst')",
+    )
+    notes_p.add_argument(
         "--list", action="store_true", help="List notes (default if --add not given)"
+    )
+
+    batch_p = sub.add_parser(
+        "batch", help="Triage a directory of evidence: one case per file"
+    )
+    batch_p.add_argument("input_dir", help="Directory of evidence files to triage")
+    batch_p.add_argument(
+        "--output",
+        required=True,
+        help="Output directory for batch-summary.json and batch-manifest.json",
+    )
+    batch_p.add_argument(
+        "--severity",
+        default=None,
+        help="Minimum finding severity (default: config default_severity, else all)",
+    )
+
+    export_p = sub.add_parser("export", help="Export case events/findings as JSONL")
+    export_p.add_argument("--case", required=True, help="Case identifier")
+    export_p.add_argument(
+        "--what",
+        choices=["events", "findings"],
+        default="events",
+        help="What to export (default: events)",
+    )
+    export_p.add_argument(
+        "--format",
+        choices=["jsonl"],
+        default="jsonl",
+        help="Export format (default: jsonl)",
+    )
+    export_p.add_argument(
+        "--output",
+        "-o",
+        default=None,
+        help="Output file (default: stdout; the result envelope then goes to stderr)",
     )
 
     return parser
@@ -503,8 +561,13 @@ def cmd_registry(
     args: argparse.Namespace, state_dir: Path
 ) -> tuple[Result, str | None]:
     result = Result(command="registry")
+    hive_path = Path(args.hive).expanduser()
+    oversize = check_parse_size(hive_path)
+    if oversize:
+        result.fail(oversize)
+        return result, None
     try:
-        data = Path(args.hive).expanduser().read_bytes()
+        data = hive_path.read_bytes()
     except OSError as exc:
         result.fail(f"cannot read hive file: {exc}")
         return result, None
@@ -667,9 +730,13 @@ def cmd_detect(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str |
             return result, args.case
         min_severity: Severity | None = None
         exact: Severity | None = None
-        if args.severity:
+        cfg = getattr(args, "app_config", None)
+        severity_arg = args.severity or (
+            cfg.default_severity if cfg is not None else None
+        )
+        if severity_arg:
             try:
-                level, at_least = Severity.parse(args.severity)
+                level, at_least = Severity.parse(severity_arg)
             except ValueError as exc:
                 result.fail(str(exc))
                 return result, args.case
@@ -939,7 +1006,13 @@ def cmd_notes(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | 
         added: dict[str, Any] | None = None
         if args.add is not None:
             try:
-                added = reporting_mod.notes_mod.add_note(db, args.add)
+                cfg = getattr(args, "app_config", None)
+                author = (
+                    args.author
+                    or (cfg.analyst_name if cfg is not None else None)
+                    or "analyst"
+                )
+                added = reporting_mod.notes_mod.add_note(db, args.add, author=author)
             except CaseError as exc:
                 result.fail(str(exc))
                 return result, args.case
@@ -957,6 +1030,106 @@ def cmd_notes(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | 
             result.summary = f"note #{added['id']} added"
         else:
             result.summary = f"{len(notes)} note(s)"
+    finally:
+        db.close()
+    return result, args.case
+
+
+def cmd_batch(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | None]:
+    result = Result(command="batch")
+    cfg = getattr(args, "app_config", None)
+    severity_arg = args.severity or (cfg.default_severity if cfg is not None else None)
+    min_severity: Severity | None = None
+    if severity_arg:
+        try:
+            level, _ = Severity.parse(severity_arg)
+        except ValueError as exc:
+            result.fail(str(exc))
+            return result, None
+        min_severity = level
+    runner = batch_mod.BatchRunner(state_dir, min_severity=min_severity)
+    try:
+        summary = runner.run(args.input_dir, args.output)
+    except (ValueError, OSError) as exc:
+        result.fail(str(exc))
+        return result, None
+    if summary["files_found"] == 0:
+        result.fail(f"no evidence files found in {args.input_dir}")
+        return result, None
+    failed = summary["files_failed"]
+    result.data = summary
+    if failed and summary["cases_created"] == 0:
+        result.fail(f"no cases created; {len(failed)} file(s) failed")
+        return result, None
+    bits = ", ".join(f"{n} {sev}" for sev, n in sorted(summary["by_severity"].items()))
+    result.summary = (
+        f"{summary['cases_created']} case(s) from {summary['files_found']} file(s), "
+        f"{summary['total_events']} event(s), "
+        f"{summary['total_findings']} finding(s)"
+        + (f": {bits}" if bits else "")
+        + (
+            f"; {summary['cases_skipped']} skipped (manifest)"
+            if summary["cases_skipped"]
+            else ""
+        )
+        + (f"; {len(failed)} file(s) failed" if failed else "")
+    )
+    if failed or summary["total_findings"]:
+        result.status = "warning"
+    # Batch touches many cases; each processed case gets its own audit
+    # record inside the runner. No single-case audit applies here.
+    return result, None
+
+
+def cmd_export(args: argparse.Namespace, state_dir: Path) -> tuple[Result, str | None]:
+    result = Result(command="export")
+    service = CaseService(state_dir)
+    try:
+        db = service.open_db(args.case)
+    except CaseError as exc:
+        result.fail(str(exc))
+        return result, None
+    try:
+        count = 0
+        output = args.output
+        try:
+            if output:
+                out_path = Path(output).expanduser()
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                with out_path.open("w", encoding="utf-8") as fh:
+                    count = batch_mod.export_what(db, args.what, fh)
+                digest = batch_mod.file_sha256(out_path)
+                result.data = {
+                    "case": args.case,
+                    "what": args.what,
+                    "format": args.format,
+                    "output": str(out_path),
+                    "lines": count,
+                    "sha256": digest,
+                }
+            else:
+                # No --output: the JSONL goes to stdout; the envelope moves
+                # to stderr (or is an error in --json mode, where stdout is
+                # reserved for the envelope).
+                if args.json:
+                    result.fail("use --output with --json (stdout carries the data)")
+                    return result, args.case
+                count = batch_mod.export_what(db, args.what, sys.stdout)
+                result.data = {
+                    "case": args.case,
+                    "what": args.what,
+                    "format": args.format,
+                    "output": "stdout",
+                    "lines": count,
+                }
+                print(
+                    f"exported {count} {args.what} line(s) as JSONL",
+                    file=sys.stderr,
+                )
+        except (OSError, ValueError) as exc:
+            result.fail(str(exc))
+            return result, args.case
+        result.summary = f"exported {count} {args.what} record(s) as {args.format}"
     finally:
         db.close()
     return result, args.case
@@ -1025,6 +1198,49 @@ def _human_rules(data: dict[str, Any]) -> None:
         techniques = rule.get("mitre") or []
         if techniques:
             print(f"    ATT&CK: {', '.join(techniques)}")
+
+
+def _human_batch(data: dict[str, Any]) -> None:
+    print(f"  input: {data.get('input_dir')}")
+    print(f"  output: {data.get('output_dir')}")
+    print(
+        f"  files: {data.get('files_found')} found, "
+        f"{data.get('cases_created')} case(s) created, "
+        f"{data.get('cases_skipped')} skipped"
+    )
+    print(
+        f"  events: {data.get('total_events')}, findings: {data.get('total_findings')}"
+    )
+    by_sev = data.get("by_severity") or {}
+    if by_sev:
+        print(
+            "  by severity: "
+            + ", ".join(f"{n} {sev}" for sev, n in sorted(by_sev.items()))
+        )
+    top = data.get("top_techniques") or []
+    if top:
+        print("  top techniques:")
+        for entry in top[:5]:
+            print(
+                f"    {entry['technique_id']} {entry['name']} "
+                f"({entry['finding_count']} finding(s))"
+            )
+    failed = data.get("files_failed") or []
+    if failed:
+        print(f"  failed: {len(failed)} file(s)")
+        for item in failed[:5]:
+            print(f"    - {item['file']}: {item['error']}")
+    print(f"  summary: {data.get('output_dir')}/{batch_mod.SUMMARY_NAME}")
+    print(f"  manifest: {data.get('manifest')}")
+
+
+def _human_export(data: dict[str, Any]) -> None:
+    print(f"  case: {data.get('case')}")
+    print(f"  what: {data.get('what')} ({data.get('format')})")
+    print(f"  lines: {data.get('lines')}")
+    print(f"  output: {data.get('output')}")
+    if data.get("sha256"):
+        print(f"  sha256: {data['sha256']}")
 
 
 def _human_mitre(data: dict[str, Any]) -> None:
@@ -1237,6 +1453,13 @@ def render(
     if result.status == "error":
         print(f"error: {result.summary}", file=sys.stderr)
         return
+    if (
+        result.command == "export"
+        and result.data
+        and result.data.get("output") == "stdout"
+    ):
+        # JSONL owns stdout here; the one-line summary already went to stderr.
+        return
     print(result.summary or "ok")
     if result.command == "registry" and result.data:
         _human_registry(result.data)
@@ -1274,6 +1497,12 @@ def render(
         return
     if result.command == "notes" and result.data:
         _human_notes(result.data)
+        return
+    if result.command == "batch" and result.data:
+        _human_batch(result.data)
+        return
+    if result.command == "export" and result.data:
+        _human_export(result.data)
         return
     if result.data:
         for key, value in result.data.items():
@@ -1317,7 +1546,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.print_help()
         return EXIT_OK
     try:
-        state_dir = config_mod.resolve_state_dir(args.state_dir)
+        app_config = appconfig_mod.load_config(args.config)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+    args.app_config = app_config
+    if app_config.warnings:
+        for warning in app_config.warnings:
+            print(f"warning: {warning}", file=sys.stderr)
+    try:
+        state_dir = config_mod.resolve_state_dir(
+            args.state_dir, config_value=app_config.state_dir
+        )
     except OSError as exc:
         print(f"error: cannot use state directory: {exc}", file=sys.stderr)
         return EXIT_ERROR
@@ -1339,6 +1579,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "narrative": cmd_narrative,
         "report": cmd_report,
         "notes": cmd_notes,
+        "batch": cmd_batch,
+        "export": cmd_export,
     }
     handler = handlers.get(args.command)
     if handler is None:  # pragma: no cover - argparse guards this
