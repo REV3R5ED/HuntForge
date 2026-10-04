@@ -47,12 +47,17 @@ LINES: list[tuple[str, str]] = [
         "  powershell.exe on WS-FIN-014: 4 event(s), 3 finding(s); "
         "top finding: Run-key persistence (medium)",
     ),
-    ("out", "  confidence 80: weakest linkage: same-file (events #6/#9, confidence 80)"),
+    (
+        "out",
+        "  confidence 80: weakest linkage: same-file "
+        "(events #6/#9, confidence 80)",
+    ),
     ("out", "  OBSERVED (4 events):"),
     (
         "out",
         "    2026-10-02T09:12:41Z [#4] sysmon:1 powershell.exe (pid 7422): "
-        "powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand aQBmACgAWwBJAG",
+        "powershell.exe -NoProfile -ExecutionPolicy Bypass "
+        "-EncodedCommand aQBmACgAWwBJAG",
     ),
     (
         "out",
