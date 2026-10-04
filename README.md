@@ -14,13 +14,25 @@ default, every detection is explainable with preserved evidence, humans
 make the final judgment, and observed facts are always distinguished
 from inference.
 
-## v0.9 — what works today
+## v1.0 — what works today (stable)
 
 - **Core CLI** (`huntforge`): `case create/show/list`, `ingest`,
   `events`, `registry`, `timeline`, `lineage`, `entities`, `detect`,
   `rules list`, `mitre`, `mitre techniques`, `sigma list`,
-  `sigma run`, `audit`, `--version`. JSON output on every command
-  (`--json`), structured exit codes (0 ok / 1 findings / 2 error).
+  `sigma run`, `correlate`, `narrative`, `report case`, `notes`,
+  `batch`, `export`, `schema`, `audit`, `--version`. JSON output on
+  every command (`--json`), structured exit codes (0 ok / 1 findings
+  / 2 error).
+- **Stable schemas** (`huntforge schema`, `docs/SCHEMAS.md`): the
+  `--json` envelope, event, finding, linkage, narrative, report,
+  batch summary/manifest, and JSONL export contracts are frozen at
+  `@1.0`. Fields are only ever added during v1.x — never removed,
+  renamed, or retyped. `tests/test_schemas.py` validates every
+  command's output against the documented schemas, so drift fails
+  the build instead of breaking your pipeline.
+- **CLI stability promise** (`docs/CLI-STABILITY.md`): command
+  names, flags, exit codes, and JSON shapes are frozen for v1.x,
+  with a documented deprecation policy.
 - **Normalized event model** (the v1.0-stable core): UTC-normalized
   timestamps with originals preserved, host/user, source + event id,
   process and parent (name/pid), command line, network tuple,
@@ -172,6 +184,16 @@ huntforge export --case CASE-001 --what findings -o findings.jsonl
 
 See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 
+## Stability (v1.x)
+
+- [docs/CLI-STABILITY.md](docs/CLI-STABILITY.md) — the frozen
+  command surface and deprecation policy.
+- [docs/SCHEMAS.md](docs/SCHEMAS.md) — every JSON contract, with
+  versioned `$id`s (`huntforge/event@1.0`, …).
+- [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) — driving HuntForge
+  from a pipeline (JSONL, envelope, exit codes, batch, config).
+- `huntforge schema [name]` prints the schema documents offline.
+
 ## Roadmap
 
 - [x] **v0.1** — Core CLI, normalized event model, JSON output, provenance
@@ -183,9 +205,9 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - [x] **v0.7** — Correlation engine, attack narratives (linkages labeled INFERRED)
 - [x] **v0.8** — Case reporting (HTML/JSON/Markdown/CSV), analyst notes, chain of custody
 - [x] **v0.9** — Batch triage, JSONL export for SIEM, analyst config file, hardening pass
-- [ ] **v1.0** — Stable schemas, release docs, benchmark/demo corpus, hardened plugin API
+- [x] **v1.0** — Stable schemas, CLI stability promise, schema-conformance tests, release docs
 
-## Limitations (v0.9)
+## Limitations (v1.0)
 
 - **Binary `.evtx` is not parsed**: the adapter detects it by magic
   bytes and prints the exact `wevtutil qe … /f:xml` command to export

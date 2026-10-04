@@ -1,10 +1,13 @@
-# HuntForge integrations (v0.9)
+# HuntForge integrations (v1.0)
 
 Everything an automation consumer needs to drive HuntForge from a
 pipeline: the JSONL export schemas, the result envelope, exit codes,
 the batch manifest/summary formats, input caps, and the config file.
 HuntForge is stdlib-only and fully offline — nothing here makes
 network calls.
+
+The full field-level contracts live in `docs/SCHEMAS.md` and are
+machine-readable via `huntforge schema <name>` (no network needed).
 
 ## JSONL export (`huntforge export`)
 
@@ -27,9 +30,9 @@ huntforge export --case CASE-001 --what events > events.jsonl   # stdout mode
 ```json
 {
   "record_type": "event",
-  "schema": "huntforge/event@0.9",
+  "schema": "huntforge/event@1.0",
   "tool": "huntforge",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "record": {
     "id": 3,
     "timestamp": "2026-10-02T09:14:02Z",
@@ -57,7 +60,8 @@ huntforge export --case CASE-001 --what events > events.jsonl   # stdout mode
       "parser_version": "0.2.0",
       "ingest_time": "2026-10-03T07:00:51Z",
       "source_sha256": "..."
-    }
+    },
+    "raw": "sysmon event 1"
   }
 }
 ```
@@ -67,27 +71,34 @@ huntforge export --case CASE-001 --what events > events.jsonl   # stdout mode
 ```json
 {
   "record_type": "finding",
-  "schema": "huntforge/finding@0.9",
+  "schema": "huntforge/finding@1.0",
   "tool": "huntforge",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "record": {
     "finding_uid": "HF-0001",
     "rule_id": "HF-DET-ENCPSH",
+    "rule_version": "0.5.0",
     "severity": "high",
     "title": "Encoded PowerShell execution",
-    "why": "powershell.exe ran with -EncodedCommand ...",
-    "confidence": "high",
+    "confidence": 75,
     "confidence_reason": "...",
+    "why": ["powershell.exe ran with -EncodedCommand ..."],
+    "what": "powershell.exe(8114) executed an encoded command",
     "evidence": [{"event_id": 3, "observation": "..."}],
+    "observed": ["..."],
+    "inferred": ["..."],
     "mitre": ["T1059.001"],
-    "observed_vs_inferred": {"observed": [...], "inferred": [...]}
+    "provenance": "huntforge.detections",
+    "created_at": "2026-10-03T07:00:52Z"
   }
 }
 ```
 
-Schema stability: `huntforge/event@0.9` / `huntforge/finding@0.9` are
-the v0.9 contracts. New fields may be added; existing fields will not
-be renamed or removed before v1.0 without a schema-version bump.
+Schema stability: `huntforge/event@1.0` / `huntforge/finding@1.0`
+are the frozen v1.x contracts. New fields may be added; existing
+fields will not be renamed, removed, or retyped during v1.x. A
+breaking change would mint new `$id` versions (e.g.
+`huntforge/event@2.0`).
 
 ## Result envelope (`--json`)
 
@@ -97,7 +108,7 @@ is omitted on `export`, where stdout is the data):
 ```json
 {
   "tool": "huntforge",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "command": "detect",
   "timestamp": "2026-10-03T07:00:00Z",
   "status": "ok",
@@ -110,7 +121,8 @@ is omitted on `export`, where stdout is the data):
 
 `status` is `ok` | `warning` | `error`. Diagnostics always go to
 stderr; stdout carries only the envelope (or the data, for stdout
-export).
+export). The envelope contract is `huntforge/envelope@1.0`
+(`huntforge schema envelope`).
 
 ## Exit codes
 
@@ -133,14 +145,16 @@ huntforge batch ./evidence-drop --output ./batch-out --severity high
   — deterministic from the sorted filename order. Each file is
   ingested with source auto-detection and run through the detection
   catalog; findings are stored in the case.
-- `batch-summary.json` (in `--output`): files found/created/skipped,
+- `batch-summary.json` (in `--output`, contract
+  `huntforge/batch-summary@1.0`): files found/created/skipped,
   per-case event and finding counts, severity totals, `files_failed`,
   and `top_techniques` (ATT&CK coverage computed from stored
   findings only).
-- `batch-manifest.json` (in `--output`): per-SHA-256 processing
-  records. Re-running the same command **skips** files already
-  processed (`status: "skipped"`). A corrupt manifest is discarded
-  and rebuilt — never fatal.
+- `batch-manifest.json` (in `--output`, contract
+  `huntforge/batch-manifest@1.0`): per-SHA-256 processing records.
+  Re-running the same command **skips** files already processed
+  (`status: "skipped"`). A corrupt manifest is discarded and
+  rebuilt — never fatal.
 - Each processed case gets its own `batch` audit record in the case DB.
 
 ## Input caps
@@ -169,5 +183,5 @@ analyst_name = "Pouya"               # default author for notes --add
 
 - All keys optional; unknown keys produce a stderr warning.
 - `default_severity` must be
-  `informational|low|medium|high|c
-...[truncated 425 chars]
+  `informational|low|medium|high|critical` (a bare level filters to
+  exactly that level; append `+`, e.g. `high+`, for "at least").

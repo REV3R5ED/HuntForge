@@ -3,6 +3,70 @@
 All notable changes to HuntForge are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0] - 2026-10-03
+
+The 1.0 release is a **stability** release: no new features, frozen
+contracts. Everything built across the 0.x series is now covered by
+the v1.x stability promise (`docs/CLI-STABILITY.md`).
+
+### Added
+- Stable JSON schemas (`huntforge.schemas`, `docs/SCHEMAS.md`): 18
+  versioned schema documents (`huntforge/event@1.0`,
+  `huntforge/finding@1.0`, `huntforge/linkage@1.0`,
+  `huntforge/narrative@1.0`, `huntforge/report@1.0`,
+  `huntforge/batch-summary@1.0`, `huntforge/batch-manifest@1.0`,
+  `huntforge/jsonl-envelope@1.0`, plus the CLI envelope and record
+  schemas). Fields are only ever added during v1.x.
+- `huntforge schema [name]`: prints the schema documents offline so
+  integrations can consume them without network access.
+- Schema-conformance test suite (`tests/test_schemas.py`): every
+  command's `--json` output is validated against the documented
+  schemas — drift fails the build, not a consumer's pipeline.
+- CLI stability policy (`docs/CLI-STABILITY.md`): frozen command
+  surface, exit codes, and JSON shapes for v1.x, with a documented
+  deprecation policy (none active).
+- `docs/USAGE.md` index; README "stable 1.0" framing; rewritten
+  `docs/INTEGRATIONS.md` against the frozen contracts.
+
+### Fixed
+- **Stored-finding shape drift**: `CaseDB.list_findings()` returned
+  findings with `why`/`what`/`observed`/`inferred` nested under an
+  `explanation` key, while the finding contract (and `detect` output)
+  is flat. Stored findings are now flat and canonical — JSONL
+  exports, reports, and the CLI all emit the same finding record.
+- **Narrative linkage form**: documented honestly — narratives render
+  linkages condensed (`claim` replaces `basis`/`heuristic` for
+  analyst reading); the full linkage form is always available from
+  `correlate`.
+- `docs/INTEGRATIONS.md` finding example corrected to the real
+  record shape.
+
+### Changed
+- Version 1.0.0 (`huntforge.__version__`, `pyproject.toml`).
+- Schema identifiers bumped to `@1.0`
+  (`huntforge/event@0.9` → `huntforge/event@1.0`,
+  `huntforge/finding@0.9` → `huntforge/finding@1.0`,
+  `report_schema_version: "0.8.0"` → `"huntforge/report@1.0"`).
+
+### The 0.x journey
+- **v0.1** — Core CLI, normalized event model, JSON output, provenance.
+- **v0.2** — Sysmon / Security / PowerShell ingestion (exported
+  Event XML/JSON; binary EVTX detected with export guidance).
+- **v0.3** — Prefetch, offline registry hives, scheduled tasks,
+  services, Run/RunOnce persistence scanning.
+- **v0.4** — Unified timeline (UTC, untimed section), process
+  lineage with PID-reuse honesty, entity resolution.
+- **v0.5** — Explainable detection rules (10 starters, evidence
+  chains, severity model, FP profiles in `docs/DETECTIONS.md`).
+- **v0.6** — MITRE ATT&CK technique mapping, Sigma-subset rule
+  ingestion with documented unsupported features.
+- **v0.7** — Correlation engine (temporal windows, shared-entity
+  pivots, explainable scoring) and INFERRED-labeled narratives.
+- **v0.8** — Case management, analyst notes, chain-of-custody audit,
+  reproducible reports (JSON/HTML/Markdown/CSV).
+- **v0.9** — Batch triage (one case per file, resumable manifest),
+  JSONL export for SIEM, analyst config file, hardening pass.
+
 ## [0.9.0] - 2026-10-03
 
 ### Added
