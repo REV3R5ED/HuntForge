@@ -106,9 +106,12 @@ class TestPrefetch:
         with pytest.raises(prefetch_mod.PrefetchError, match="truncated"):
             prefetch_mod.parse_prefetch(b"SCCA" + b"\x00" * 10)
 
-    def test_static_truncated_fixture_warns(self):
+    def test_static_truncated_fixture_warns(self, tmp_path):
+        # Self-contained: truncated build_prefetch() bytes, no binary fixture.
+        target = tmp_path / "truncated.pf"
+        target.write_bytes(build_prefetch()[:64])
         events, warnings = prefetch_mod.parse_prefetch_file(
-            FIXTURES / "truncated.pf", source_sha256="ab" * 32
+            target, source_sha256="ab" * 32
         )
         assert events == [] and len(warnings) == 1
 
@@ -284,8 +287,9 @@ class TestRegistry:
             registry_mod.Hive(b"regf")
 
     def test_static_bad_hive(self):
+        # Self-contained: "regf" magic + garbage, no binary fixture.
         with pytest.raises(registry_mod.HiveError):
-            registry_mod.Hive((FIXTURES / "bad_hive.dat").read_bytes())
+            registry_mod.Hive(b"regf" + b"\x00" * 100 + b"garbage")
 
     def test_last_write_relative(self):
         moment = utcnow() - timedelta(hours=3)
@@ -506,8 +510,9 @@ class TestRegistryScan:
         assert run.command_line == "C:\\Temp\\evil.exe"
 
     def test_scan_bad_hive_warns(self):
+        # Self-contained: "regf" magic + garbage, no binary fixture.
         events, warnings = persistence_mod.scan_registry_persistence(
-            (FIXTURES / "bad_hive.dat").read_bytes(),
+            b"regf" + b"\x00" * 100 + b"garbage",
             source_file="bad.dat",
             source_sha256="ab" * 32,
         )
@@ -584,7 +589,8 @@ class TestWiring:
 
     def test_ingest_truncated_prefetch_warns(self, tmp_path, case_db):
         target = tmp_path / "broken.pf"
-        target.write_bytes((FIXTURES / "truncated.pf").read_bytes())
+        # Self-contained: truncated build_prefetch() bytes, no binary fixture.
+        target.write_bytes(build_prefetch()[:64])
         summary = ingest_path(case_db, target)
         assert summary["parsed_events"] == 0
         assert summary["parse_warnings"]  # warning, exit stays 0
