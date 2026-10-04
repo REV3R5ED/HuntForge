@@ -14,7 +14,7 @@ default, every detection is explainable with preserved evidence, humans
 make the final judgment, and observed facts are always distinguished
 from inference.
 
-## v0.7 — what works today
+## v0.8 — what works today
 
 - **Core CLI** (`huntforge`): `case create/show/list`, `ingest`,
   `events`, `registry`, `timeline`, `lineage`, `entities`, `detect`,
@@ -119,6 +119,22 @@ from inference.
   with a "what's missing" section (expected-but-unobserved evidence).
   Cluster confidence is the weakest linkage — documented, never
   averaged away. See [docs/CORRELATION.md](docs/CORRELATION.md).
+- **Case reporting** (`huntforge report case CASE-ID --output DIR
+  --format html|json|md|all`, `huntforge notes --case ID [--add TEXT]
+  [--list]`): structured reports assembling case metadata, evidence,
+  timeline highlights, process lineage, detections (OBSERVED/INFERRED
+  labeled), ATT&CK coverage, correlated narratives, entities, analyst
+  notes, methodology, limitations, and chain of custody.
+  - Formats: self-contained offline HTML (inline CSS, no external
+    assets), JSON, Markdown, plus a formula-injection-safe CSV
+    findings export. Stdlib-only; PDF export is out of scope.
+  - The executive summary is machine-generated from counts and marked
+    `generated` + `analyst_review_required` — a starting point, not a
+    conclusion. "What this report does not claim" states the
+    boundaries up front.
+  - Analyst notes are free text stored in the case DB, rendered
+    verbatim under a clearly-marked section. HuntForge never writes
+    notes itself. Both `report` and `notes` are audit-logged.
 
 ## Quick start
 
@@ -134,6 +150,8 @@ huntforge timeline --case CASE-001
 huntforge lineage --case CASE-001 --image powershell
 huntforge entities --case CASE-001 --type ip
 huntforge audit --case CASE-001
+huntforge notes --case CASE-001 --add "Triage: invoice lure, escalating"
+huntforge report case CASE-001 --output ./report-case-001
 ```
 
 See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
@@ -147,11 +165,11 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - [x] **v0.5** — Explainable detection rules (never label malicious from a heuristic alone)
 - [x] **v0.6** — MITRE ATT&CK mapping, Sigma-compatible rule ingestion
 - [x] **v0.7** — Correlation engine, attack narratives (linkages labeled INFERRED)
-- [ ] **v0.8** — Case management (notes, findings, manifests, chain of custody), reports
+- [x] **v0.8** — Case reporting (HTML/JSON/Markdown/CSV), analyst notes, chain of custody
 - [ ] **v0.9** — Analyst UI + ecosystem integrations (SentinelKit, LogLens, AegisForge)
 - [ ] **v1.0** — Stable schemas, release docs, benchmark/demo corpus, hardened plugin API
 
-## Limitations (v0.7)
+## Limitations (v0.8)
 
 - **Binary `.evtx` is not parsed**: the adapter detects it by magic
   bytes and prints the exact `wevtutil qe … /f:xml` command to export
@@ -170,8 +188,13 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 - Parsers are validated against synthetic fixtures built to the
   published binary layouts; validation against live forensic copies
   is pending.
-- No reports yet (v0.8).
-  Amcache/Shimcache parsing is not yet implemented.
+- **Reports assemble, they don't re-analyze**: the report gathers
+  what's already in the case — new evidence means re-running the
+  pipeline and generating a new report. The executive summary is
+  machine-generated counts, marked as requiring analyst review. PDF
+  export is out of scope (print the self-contained HTML from a
+  browser).
+- Amcache/Shimcache parsing is not yet implemented.
 - **Correlation is inference, not evidence**: linkages are
   deterministic hypotheses with documented failure modes
   (PID reuse, basename collisions, temporal coincidence). The
@@ -193,7 +216,7 @@ See [docs/USAGE.md](docs/USAGE.md) for a full scenario walkthrough.
 
 ```bash
 python -m pip install -e '.[dev]'
-pytest -q            # 369 tests, 87%+ coverage, 80% gate
+pytest -q            # 400 tests, 88%+ coverage, 80% gate
 ruff check . && ruff format --check . && mypy src
 ```
 

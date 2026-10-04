@@ -16,9 +16,15 @@ heuristics (same-process, same-file, persistence-execution,
 download-execution) join events into activity clusters; each cluster
 gets an attack narrative with the observed timeline, the INFERRED
 linkages, detections, techniques, and a "what's missing" section.
+
+v0.8 adds case reporting: structured HTML/JSON/Markdown reports plus a
+formula-safe CSV findings export, analyst notes stored in the case,
+and chain-of-custody appendices. The executive summary is
+machine-generated and marked as requiring analyst review; observed
+facts and inferences stay labeled.
 """
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 __author__ = "Pouya Shini Karim"
 
 from huntforge.core import config, logging, plugins, results

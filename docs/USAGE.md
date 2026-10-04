@@ -3,6 +3,96 @@
 Scenario-driven walkthroughs for HuntForge. All output below is
 genuine — produced by running the commands against synthetic evidence.
 
+## Scenario (v0.8): reporting the intrusion case
+
+The same invoice-lure chain (doc → PowerShell `-enc` → outbound
+connection → dropped payload → Run key), now assembled into a case
+report. v0.8's `huntforge.reporting` gathers everything in the case —
+evidence, timeline, lineage, detections, ATT&CK coverage, correlated
+narratives, entities — into one structured document, and the analyst's
+own notes go in verbatim under a clearly-marked section.
+
+### 1. Annotate the case
+
+Detections already ran (`huntforge detect` stores its findings in the
+case). Before reporting, the analyst records their judgment — notes
+are analyst-authored free text, stored in the case database:
+
+```console
+$ huntforge notes --case CASE-008 --add "Confirmed the invoice lure chain; escalating to IR."
+note #1 added
+$ huntforge notes --case CASE-008 --list
+1 note(s)
+  [#1] 2026-10-03T06:51:11Z (analyst): Confirmed the invoice lure chain; escalating to IR.
+```
+
+HuntForge never writes notes itself — the section exists for the
+human.
+
+### 2. Generate the report
+
+```console
+$ huntforge report case CASE-008 --output ./report-case-008 --format all
+report for CASE-008: 4 file(s) in ./report-case-008
+  wrote ./report-case-008/CASE-008.html
+  wrote ./report-case-008/CASE-008.json
+  wrote ./report-case-008/CASE-008.md
+  wrote ./report-case-008/CASE-008-findings.csv
+  report schema 0.8.0
+  executive summary is generated — analyst review required
+```
+
+Four files, all stdlib-generated, all offline:
+
+- `CASE-008.html` — self-contained page (inline CSS, no external
+  assets, no network): overview, findings table with OBSERVED /
+  INFERRED badges, narratives, analyst notes, chain of custody.
+- `CASE-008.json` — the full structured report for automation.
+- `CASE-008.md` — the analyst-readable document.
+- `CASE-008-findings.csv` — the flat findings table. Cells that look
+  like spreadsheet formulas (`=`, `+`, `-`, `@`) are neutralized with
+  a leading quote — a CSV opened in Excel must not execute anything.
+
+The Markdown opens with the honest parts first:
+
+```markdown
+## Executive summary *(generated — analyst review required)*
+
+Case CASE-008: 29 events from 5 source(s) across 6 evidence file(s).
+12 detection finding(s) (highest severity: high); 5 ATT&CK technique(s)
+with findings; 4 correlated activity cluster(s); 0 untimed event(s);
+1 analyst note(s). This summary is machine-generated from counts and
+requires analyst review.
+
+## What this report does not claim
+
+- This report does not attribute activity to a named threat actor.
+  Technique IDs describe observed behavior shapes, not intent or identity.
+- This report does not declare the case clean. Absence of findings is
+  absence of observed evidence, not evidence of absence — see the
+  "what's missing" notes in each narrative.
+- INFERRED linkages are deterministic hypotheses with documented
+  failure modes, not facts. They are labeled wherever they appear.
+```
+
+Every finding keeps its OBSERVED facts and INFERRED hypotheses in
+separate, labeled lists; the methodology section names the parsers
+(and versions) that produced the evidence plus the analysis steps from
+the case audit log, so re-running those commands reproduces the
+report; and the chain-of-custody appendix lists every evidence file
+with its SHA-256 and ingest time.
+
+![HuntForge v0.8 case report](images/08-report.png)
+
+### Honest limitations (v0.8)
+
+- The executive summary is counts, not conclusions — it ships marked
+  `generated` and requires analyst review before it leaves the team.
+- PDF export is out of scope (stdlib-only; no PDF writer). Print the
+  self-contained HTML to PDF from a browser if you need one.
+- Reports assemble what's in the case — they never re-run parsers or
+  change detections. New evidence means a new report.
+
 ## Scenario (v0.7): correlating the intrusion chain into one narrative
 
 The same intrusion chain (invoice doc → PowerShell `-enc` → outbound

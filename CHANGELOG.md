@@ -3,6 +3,37 @@
 All notable changes to HuntForge are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0] - 2026-10-03
+
+### Added
+- Case reporting (`huntforge.reporting`, stdlib-only, registered in
+  the plugin registry as `reporting` v0.8.0):
+  - Case report model (`reporting/model.py`): assembles case metadata,
+    evidence, timeline highlights (first/last events, untimed count),
+    process lineage, detections, ATT&CK coverage, correlated
+    narratives, entities, analyst notes, methodology, limitations,
+    and chain of custody into one structured document.
+  - Reporting philosophy: OBSERVED facts and INFERRED hypotheses are
+    labeled everywhere they appear; the executive summary is
+    machine-generated from counts and marked `generated` +
+    `analyst_review_required`; a "what this report does not claim"
+    section states the boundaries up front.
+  - Renderers (`reporting/render.py`): self-contained offline HTML
+    (inline CSS, no external assets — verified by test), JSON,
+    Markdown, and a CSV findings export with spreadsheet-formula
+    injection neutralization (`=`/`+`/`-`/`@` cells get a leading
+    quote). PDF export is out of scope (stdlib-only; no PDF writer).
+  - `huntforge report case CASE-ID --output DIR --format
+    html|json|md|all` (writes `CASE-ID.html/.json/.md` plus
+    `CASE-ID-findings.csv` for `all`).
+- Analyst notes (`huntforge notes --case ID [--add "text"] [--list]`):
+  free-text annotations stored in a new `notes` table in the case
+  database (auto-migrated on pre-v0.8 databases), rendered verbatim
+  under a clearly-marked analyst section. HuntForge never writes
+  notes itself. Both `report` and `notes` are audit-logged.
+- `docs/USAGE.md`: v0.8 scenario — annotating and reporting the
+  intrusion case — with a genuine terminal screenshot.
+
 ## [0.7.0] - 2026-10-03
 
 ### Added
