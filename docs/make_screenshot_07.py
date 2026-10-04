@@ -49,8 +49,7 @@ LINES: list[tuple[str, str]] = [
     ),
     (
         "out",
-        "  confidence 80: weakest linkage: same-file "
-        "(events #6/#9, confidence 80)",
+        "  confidence 80: weakest linkage: same-file (events #6/#9, confidence 80)",
     ),
     ("out", "  OBSERVED (4 events):"),
     (

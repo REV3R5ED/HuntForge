@@ -26,8 +26,7 @@ LINES: list[tuple[str, str]] = [
     ("prompt", "huntforge batch ./evidence-drop --output ./batch-out"),
     (
         "out",
-        "4 case(s) from 4 file(s), 14 event(s), "
-        "6 finding(s): 5 high, 1 medium",
+        "4 case(s) from 4 file(s), 14 event(s), 6 finding(s): 5 high, 1 medium",
     ),
     ("out", "  input: ./evidence-drop"),
     ("out", "  output: ./batch-out"),

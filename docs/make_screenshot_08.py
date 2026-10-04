@@ -38,8 +38,7 @@ LINES: list[tuple[str, str]] = [
     ),
     (
         "prompt",
-        "huntforge report case CASE-008 --output ./report-case-008 "
-        "--format all",
+        "huntforge report case CASE-008 --output ./report-case-008 --format all",
     ),
     ("out", "report for CASE-008: 4 file(s) in ./report-case-008"),
     ("out", "  wrote ./report-case-008/CASE-008.html"),
