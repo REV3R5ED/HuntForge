@@ -50,7 +50,8 @@ POWERSHELL_XML = FIXTURES / "powershell_events.xml"
 GENERIC_EVTx = FIXTURES / "generic_evtx.xml"
 MALFORMED_XML = FIXTURES / "malformed.xml"
 MALFORMED_JSON = FIXTURES / "malformed.json"
-BINARY_EVTX = FIXTURES / "binary_test.evtx"
+# Self-contained synthetic binary EVTX (magic + zeros); no binary fixture.
+BINARY_EVTX_BYTES = b"ElfFile\x00" + b"\x00" * 1024
 
 
 def by_event_id(events: list[NormalizedEvent]) -> dict[str, list[NormalizedEvent]]:
@@ -66,8 +67,8 @@ def by_event_id(events: list[NormalizedEvent]) -> dict[str, list[NormalizedEvent
 
 
 class TestPackaging:
-    def test_version_is_0_7(self) -> None:
-        assert __version__ == "0.7.0"
+    def test_version_is_0_8(self) -> None:
+        assert __version__ == "0.8.0"
 
     def test_source_kinds(self) -> None:
         assert set(SOURCE_KINDS) == {
@@ -101,11 +102,16 @@ class TestDetection:
             (GENERIC_EVTx, "evtx-xml"),
             (SYSMON_JSON, "sysmon"),
             (SECURITY_JSON, "security"),
-            (BINARY_EVTX, "evtx-binary"),
         ],
     )
     def test_detect_fixtures(self, path: Path, kind: str) -> None:
         assert detect_source(path) == kind
+
+    def test_detect_binary_evtx(self, tmp_path: Path) -> None:
+        # Self-contained: synthetic binary EVTX, no binary fixture.
+        target = tmp_path / "binary_test.evtx"
+        target.write_bytes(BINARY_EVTX_BYTES)
+        assert detect_source(target) == "evtx-binary"
 
     def test_detect_garbage_bytes(self, tmp_path: Path) -> None:
         target = tmp_path / "junk.bin"
@@ -376,12 +382,18 @@ class TestEvtxAdapter:
         assert event.event_id == "1000"
         assert event.host == "WS-FIN-014"
 
-    def test_binary_magic_detected(self) -> None:
-        assert is_evtx_binary(BINARY_EVTX)
+    def test_binary_magic_detected(self, tmp_path: Path) -> None:
+        # Self-contained: synthetic binary EVTX, no binary fixture.
+        target = tmp_path / "binary_test.evtx"
+        target.write_bytes(BINARY_EVTX_BYTES)
+        assert is_evtx_binary(target)
 
-    def test_binary_parse_raises_with_wevtutil_guidance(self) -> None:
+    def test_binary_parse_raises_with_wevtutil_guidance(self, tmp_path: Path) -> None:
+        # Self-contained: synthetic binary EVTX, no binary fixture.
+        target = tmp_path / "binary_test.evtx"
+        target.write_bytes(BINARY_EVTX_BYTES)
         with pytest.raises(EvtxBinaryError) as exc_info:
-            parse_file(BINARY_EVTX, "evtx-binary", source_sha256=SHA)
+            parse_file(target, "evtx-binary", source_sha256=SHA)
         message = str(exc_info.value)
         assert "wevtutil" in message
         assert "/f:xml" in message
@@ -484,7 +496,7 @@ class TestIngestParsers:
         self, case_db, tmp_path: Path
     ) -> None:
         dest = tmp_path / "binary_test.evtx"
-        dest.write_bytes(BINARY_EVTX.read_bytes())
+        dest.write_bytes(BINARY_EVTX_BYTES)
         summary = ingest_path(case_db, dest)
         assert summary["registered"] == 1
         assert summary["parsed_events"] == 0
@@ -602,7 +614,7 @@ class TestCliV02:
         self, isolated_state: Path, tmp_path: Path, capsys: pytest.CaptureFixture
     ) -> None:
         dest = tmp_path / "binary_test.evtx"
-        dest.write_bytes(BINARY_EVTX.read_bytes())
+        dest.write_bytes(BINARY_EVTX_BYTES)
         assert cli_main(["case", "create", "cli02"]) == 0
         code = cli_main(["ingest", str(dest), "--case", "cli02"])
         assert code == 0  # exit 0: registered as evidence, warning shown

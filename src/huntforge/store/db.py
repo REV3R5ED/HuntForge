@@ -104,6 +104,14 @@ CREATE TABLE IF NOT EXISTS findings (
 );
 CREATE INDEX IF NOT EXISTS findings_rule ON findings(rule_id);
 CREATE INDEX IF NOT EXISTS findings_severity ON findings(severity);
+-- v0.8: analyst notes (free-text annotations, clearly marked as
+-- analyst-authored in every rendering).
+CREATE TABLE IF NOT EXISTS notes (
+    id INTEGER PRIMARY KEY,
+    ts TEXT NOT NULL,
+    author TEXT NOT NULL DEFAULT 'analyst',
+    text TEXT NOT NULL
+);
 """
 
 
@@ -152,7 +160,7 @@ class CaseDB:
         self._migrate()
 
     def _migrate(self) -> None:
-        """Bring older databases up to the current schema (v0.1 -> v0.2)."""
+        """Bring older databases up to the current schema (v0.1 -> v0.8)."""
         columns = {r["name"] for r in self._conn.execute("PRAGMA table_info(events)")}
         if "flags" not in columns:
             self._conn.execute(
@@ -174,6 +182,16 @@ class CaseDB:
                 "DEFAULT 'huntforge.detections'"
             )
             self._conn.commit()
+        # v0.8: analyst notes table (fresh DBs get it from _SCHEMA).
+        self._conn.execute(
+            """CREATE TABLE IF NOT EXISTS notes (
+                   id INTEGER PRIMARY KEY,
+                   ts TEXT NOT NULL,
+                   author TEXT NOT NULL DEFAULT 'analyst',
+                   text TEXT NOT NULL
+               )"""
+        )
+        self._conn.commit()
 
     @classmethod
     def create(cls, state_dir: Path, case_id: str, name: str | None = None) -> CaseDB:
@@ -478,6 +496,44 @@ class CaseDB:
             }
             for r in rows
         ]
+
+    # -- notes ------------------------------------------------------------
+    def add_note(self, text: str, author: str = "analyst") -> int:
+        """Append an analyst note; returns the note id.
+
+        Notes are analyst-authored free text. They are never generated
+        by HuntForge itself and are always rendered under a
+        clearly-marked "Analyst notes" section.
+        """
+        cleaned = text.strip()
+        if not cleaned:
+            raise CaseError("note text must not be empty")
+        cursor = self._conn.execute(
+            "INSERT INTO notes(ts, author, text) VALUES (?, ?, ?)",
+            (utc_now_iso(), author, cleaned),
+        )
+        self._conn.commit()
+        note_id = cursor.lastrowid
+        if note_id is None:  # pragma: no cover - sqlite always returns a rowid
+            raise CaseError("failed to store note")
+        return note_id
+
+    def list_notes(self) -> list[dict[str, Any]]:
+        """Analyst notes, oldest first."""
+        rows = self._conn.execute("SELECT * FROM notes ORDER BY id ASC").fetchall()
+        return [
+            {
+                "id": int(r["id"]),
+                "ts": r["ts"],
+                "author": r["author"],
+                "text": r["text"],
+            }
+            for r in rows
+        ]
+
+    def note_count(self) -> int:
+        row = self._conn.execute("SELECT COUNT(*) AS n FROM notes").fetchone()
+        return int(row["n"])
 
     # -- audit ----------------------------------------------------------
     def audit(
